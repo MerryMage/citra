@@ -2,6 +2,11 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <algorithm>
+#include <array>
+#include <memory>
+#include <queue>
+
 #include <AL/al.h>
 #include <AL/alc.h>
 #include <AL/alext.h>
@@ -11,10 +16,6 @@
 
 #include "core/audio/audio.h"
 
-#include <algorithm>
-#include <array>
-#include <memory>
-#include <queue>
 
 namespace Audio {
 
@@ -139,10 +140,8 @@ int InitAL() {
 
     context = ALCContextPointer(alcCreateContext(device.get(), nullptr), &alcDestroyContext);
     if (context == nullptr || alcMakeContextCurrent(context.get()) == ALC_FALSE) {
-        if (context != nullptr) {
-            context = nullptr;
-        }
-        device = nullptr;
+        context.reset();
+        device.reset();
         LOG_CRITICAL(Audio, "Could not set a context!");
         return 1;
     }
@@ -173,6 +172,8 @@ void Init() {
 
 void Shutdown() {
     alcMakeContextCurrent(nullptr);
+    context.reset();
+    device.reset();
 }
 
 void UpdateFormat(int channel_id, int mono_or_stereo, Format format) {
@@ -185,11 +186,21 @@ void UpdateAdpcm(int channel_id, s16 coeffs[16]) {
     std::copy(coeffs, coeffs+16, std::begin(chans[channel_id].adpcm_coeffs));
 }
 
-void EnqueueBuffer(int channel_id, u16 buffer_id, void* data, int sample_count, bool is_looping) {
-    LOG_DEBUG(Audio, "Channel %i: Buffer %i: Enqueued (size %i)", channel_id, buffer_id, sample_count);
+void SilenceBuffer(ALuint& b, int channel_id, u16 buffer_id) {
+    if (alGetError() != AL_NO_ERROR) {
+        LOG_CRITICAL(Audio, "Channel %i: Buffer %u: OpenAL says \"%s\"", channel_id, buffer_id, alGetString(alGetError()));
+    }
+    alBufferData(b, AL_FORMAT_MONO8, silence.data(), silence.size(), BASE_SAMPLE_RATE);
+    if (alGetError() != AL_NO_ERROR) {
+        LOG_CRITICAL(Audio, "Channel %i: Failed to init silence buffer!!! (%s)", channel_id, alGetString(alGetError()));
+    }
+}
+
+void EnqueueBuffer(int channel_id, u16 buffer_id, const u8* data, int sample_count, bool is_looping) {
+    LOG_DEBUG(Audio, "Channel %i: Buffer %u: Enqueued (size %i)", channel_id, buffer_id, sample_count);
 
     if (is_looping) {
-        LOG_WARNING(Audio, "Channel %i: Buffer %i: Looped buffers are unimplemented", channel_id, buffer_id);
+        LOG_WARNING(Audio, "Channel %i: Buffer %u: Looped buffers are unimplemented", channel_id, buffer_id);
     }
 
     auto& c = chans[channel_id];
@@ -229,10 +240,10 @@ void EnqueueBuffer(int channel_id, u16 buffer_id, void* data, int sample_count, 
         break;
     case Format::ADPCM: {
         if (c.mono_or_stereo != 1) {
-            LOG_ERROR(Audio, "Channel %i: Buffer %i: Being fed non-mono ADPCM (size: %i samples)", channel_id, buffer_id, sample_count);
+            LOG_ERROR(Audio, "Channel %i: Buffer %u: Being fed non-mono ADPCM (size: %i samples)", channel_id, buffer_id, sample_count);
         }
 
-        std::vector<s16> decoded = DecodeADPCM((u8*)data, sample_count, c.adpcm_coeffs, c.adpcm_state);
+        std::vector<s16> decoded = DecodeADPCM(data, sample_count, c.adpcm_coeffs, c.adpcm_state);
         alBufferData(b, AL_FORMAT_STEREO16, decoded.data(), decoded.size() * 2, BASE_SAMPLE_RATE);
 
         if (alGetError() != AL_NO_ERROR) goto do_silence;
@@ -240,22 +251,15 @@ void EnqueueBuffer(int channel_id, u16 buffer_id, void* data, int sample_count, 
         break;
     }
     default:
-        LOG_ERROR(Audio, "Channel %i: Buffer %i: Unrecognised audio format (size: %i samples)", channel_id, buffer_id, sample_count);
-    do_silence:
-        if (alGetError() != AL_NO_ERROR) {
-            LOG_CRITICAL(Audio, "Channel %i: Buffer %i: OpenAL says \"%s\"", channel_id, buffer_id, alGetString(alGetError()));
-        }
-        alBufferData(b, AL_FORMAT_MONO8, silence.data(), silence.size(), BASE_SAMPLE_RATE);
-        if (alGetError() != AL_NO_ERROR) {
-            LOG_CRITICAL(Audio, "Channel %i: Failed to init silence buffer!!! (%s)", channel_id, alGetString(alGetError()));
-        }
+        LOG_ERROR(Audio, "Channel %i: Buffer %u: Unrecognised audio format (size: %i samples)", channel_id, buffer_id, sample_count);
+        SilenceBuffer(b, channel_id, buffer_id);
         break;
     }
 
     c.queue.emplace(Buffer{ buffer_id, b, is_looping });
 
     if (c.queue.size() > 10) {
-        LOG_ERROR(Audio, "We have far far too many buffers enqueued on channel %i (%i of them)", channel_id, c.queue.size());
+        LOG_ERROR(Audio, "We have far far too many buffers enqueued on channel %i (%zu of them)", channel_id, c.queue.size());
     }
 }
 
@@ -277,7 +281,7 @@ void Tick(int channel_id) {
             alSourceQueueBuffers(c.source, 1, &c.queue.top().buffer);
             if (alGetError() != AL_NO_ERROR) {
                 alDeleteBuffers(1, &c.queue.top().buffer);
-                LOG_CRITICAL(Audio, "Channel %i: Buffer %i: Failed to enqueue : %s", channel_id, c.queue.top().id, alGetString(alGetError()));
+                LOG_CRITICAL(Audio, "Channel %i: Buffer %u: Failed to enqueue : %s", channel_id, c.queue.top().id, alGetString(alGetError()));
                 c.queue.pop();
                 continue;
             }
@@ -294,7 +298,7 @@ void Tick(int channel_id) {
     }
 
     if (chans[channel_id].playing.size() > 10) {
-        LOG_ERROR(Audio, "Channel %i: We have far far too many buffers enqueued (%i of them)", channel_id, chans[channel_id].playing.size());
+        LOG_ERROR(Audio, "Channel %i: We have far far too many buffers enqueued (%zu of them)", channel_id, chans[channel_id].playing.size());
     }
 
     ALint processed;
@@ -308,7 +312,7 @@ void Tick(int channel_id) {
             if (c.playing.front().buffer != buf) {
                 LOG_CRITICAL(Audio, "Channel %i: Play queue desynced with OpenAL queue. (buf???)", channel_id);
             } else {
-                LOG_DEBUG(Audio, "Channel %i: Buffer %i: Finished playing", channel_id, c.playing.front().id);
+                LOG_DEBUG(Audio, "Channel %i: Buffer %u: Finished playing", channel_id, c.playing.front().id);
             }
             c.last_buffer_id = c.playing.front().id;
             c.playing.pop();

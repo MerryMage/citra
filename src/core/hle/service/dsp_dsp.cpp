@@ -2,6 +2,8 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <unordered_map>
+
 #include "common/bit_field.h"
 #include "common/logging/log.h"
 
@@ -11,15 +13,12 @@
 #include "core/hle/kernel/event.h"
 #include "core/hle/service/dsp_dsp.h"
 
-#include <unordered_map>
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Namespace DSP_DSP
 
 namespace DSP_DSP {
 
 struct PairHash {
-public:
     template <typename T, typename U>
     std::size_t operator()(const std::pair<T, U> &x) const {
         return std::hash<T>()(x.first) ^ std::hash<U>()(x.second);
@@ -197,14 +196,14 @@ static std::array<u16, NUM_CHANNELS> syncs;
 static ChannelContext GetChannelContext(VAddr base, int channel_id) {
     auto ret = Memory::ExtractFromMemory<ChannelContext>(DspAddrToVAddr(base, DSPADDR1) + channel_id * sizeof(ChannelContext));
     if (!ret) {
-        LOG_CRITICAL(Service_DSP, "ExtractFromMemory for DSPADDR1 failed");
+        LOG_CRITICAL(Service_DSP, "ExtractFromMemory for DSPADDR1 failed"); // This should never happen.
     }
     return *ret;
 }
 
 static void SetChannelContext(VAddr base, int channel_id, const ChannelContext& ctx) {
     if (!Memory::InjectIntoMemory(DspAddrToVAddr(base, DSPADDR1) + channel_id * sizeof(ChannelContext), ctx)) {
-        LOG_CRITICAL(Service_DSP, "InjectIntoMemory for DSPADDR1 failed");
+        LOG_CRITICAL(Service_DSP, "InjectIntoMemory for DSPADDR1 failed"); // This should never happen.
     }
 }
 
@@ -281,12 +280,12 @@ static void ReadChannelContext(VAddr current_base, int channel_id) {
         // Buffer queue
         for (int i = 0; i < 4; i++) {
             if (ctx.buffers_dirty & (1 << i)) {
-                auto& b = ctx.buffers[i];
+                const auto& b = ctx.buffers[i];
                 Audio::EnqueueBuffer(channel_id, b.buffer_id, Memory::GetPhysicalPointer(b.physical_address), b.sample_count, b.is_looping);
             }
         }
 
-        if (ctx.buffers_dirty & ~(u32)0xF) {
+        if (ctx.buffers_dirty & ~0xFUL) {
             LOG_ERROR(Service_DSP, "Channel %i: Unknown channel buffer dirty bits: 0x%04x", channel_id, ctx.buffers_dirty);
         }
 

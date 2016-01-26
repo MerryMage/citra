@@ -6,8 +6,6 @@
 
 #include "common/common_types.h"
 
-#include <tuple>
-
 namespace Audio {
 
 void Init();
@@ -24,7 +22,7 @@ void UpdateAdpcm(int chanid, s16 coeffs[16]);
 
 void Play(int channel_id, bool play);
 
-void EnqueueBuffer(int channel_id, u16 buffer_id, void* data, int sample_count, bool is_looping);
+void EnqueueBuffer(int channel_id, u16 buffer_id, const u8* data, int sample_count, bool is_looping);
 
 void Tick(int channel_id);
 
