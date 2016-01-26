@@ -25,9 +25,10 @@ if [ "$TRAVIS_OS_NAME" = "linux" -o -z "$TRAVIS_OS_NAME" ]; then
 
     (
         git clone https://github.com/kcat/openal-soft.git
+        cd openal-soft
         git reset --hard 14df326876d92f63c9c007da3c0434fba47c30b8
-        mkdir openal-soft/build && cd openal-soft/build
-        cmake ..
+        mkdir build && cd build
+        cmake -DCMAKE_INSTALL_PREFIX=$HOME/.local ..
         make -j4 && make install
     )
 

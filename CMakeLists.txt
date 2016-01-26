@@ -172,14 +172,12 @@ if (CITRA_USE_BUNDLED_OPENAL)
         download_bundled_external("openal/" ${OPENAL_VER} OPENAL_PREFIX)
     endif()
 
-    set(OPENAL_INCLUDE_DIRS "${OPENAL_PREFIX}/include" CACHE PATH "Path to OpenAL-Soft headers")
-    set(OPENAL_LIBRARY_DIRS "${OPENAL_PREFIX}/libs/Win64" CACHE PATH "Path to OpenAL-Soft libraries")
-    set(OPENAL_LIBRARIES OpenAL32.lib)
+    set(OPENAL_INCLUDE_DIR "${OPENAL_PREFIX}/include" CACHE PATH "Path to OpenAL-Soft headers")
+    set(OPENAL_LIBRARY "${OPENAL_PREFIX}/libs/Win64/OpenAL32.lib" CACHE PATH "Path to OpenAL-Soft libraries")
 else()
     find_package(OpenAL REQUIRED)
 endif()
-link_directories(${OPENAL_LIBRARY_DIRS})
-include_directories(${OPENAL_INCLUDE_DIRS})
+include_directories(${OPENAL_INCLUDE_DIR})
 
 IF (APPLE)
     FIND_LIBRARY(COCOA_LIBRARY Cocoa)           # Umbrella framework for everything GUI-related

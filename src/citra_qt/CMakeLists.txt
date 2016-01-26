@@ -82,7 +82,7 @@ endif()
 target_link_libraries(citra-qt core video_core common qhexedit)
 target_link_libraries(citra-qt ${OPENGL_gl_LIBRARY} ${CITRA_QT_LIBS})
 target_link_libraries(citra-qt ${PLATFORM_LIBRARIES})
-target_link_libraries(citra-qt ${OPENAL_LIBRARIES})
+target_link_libraries(citra-qt ${OPENAL_LIBRARY})
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux|FreeBSD|OpenBSD|NetBSD")
     install(TARGETS citra-qt RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}/bin")
