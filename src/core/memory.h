@@ -131,6 +131,80 @@ void WriteBlock(VAddr addr, const u8* data, size_t size);
 u8* GetPointer(VAddr virtual_address);
 
 /**
+* Extracts an object from memory. Returns boost::none if address is invalid.
+*/
+template <typename T>
+boost::optional<T> ExtractFromMemory(const VAddr address) {
+    static_assert(std::is_standard_layout<T>::value, "Type must have standard layout");
+
+    const u8* source = GetPointer(address);
+    if (!source) {
+        return boost::none;
+    }
+
+    // Adjacent ARM11 pages might be backed by non-adjacent host memory.
+    T object;
+
+    // If we don't straddle a page boundary, just do a straight memcpy.
+    if ((address >> PAGE_BITS) == ((address + sizeof(T)) >> PAGE_BITS)) {
+        std::memcpy(&object, memory, sizeof(T));
+        return boost::make_optional(object);
+    }
+
+    // We straddle a page boundary.
+    // The memcpy is arranged in three stages:
+    // First memcpy: May be less than a page in length, to bring us to the ARM11 page boundary
+    // Middle memcpys: Zero or more copies PAGE_SIZE in length.
+    // Last memcpy: May be less than a page in length, to bring us to the end of the structure
+
+    // If GetPointer fails at any point, we're reading into unmapped memory, thus we abort.
+
+    char* destination = reinterpret_cast<char*>(&object); // char*: strict-aliasing
+    VAddr current_address = address;
+    size_t remaining_size = sizeof(T);
+
+    // First memcpy
+    size_t size_of_first_copy = PAGE_SIZE - (address & PAGE_MASK);
+    std::memcpy(destination, memory, size_of_first_copy);
+    current_address += size_of_first_copy;
+    destination += size_of_first_copy;
+    remaining_size -= size_of_first_copy;
+
+    // Middle memcpy
+    while (remaining_size > PAGE_SIZE) {
+        memory = GetPointer(current_address);
+        if (!memory) return boost::none;
+        std::memcpy(destination, memory, PAGE_SIZE);
+        current_address += PAGE_SIZE;
+        destination += PAGE_SIZE;
+        remaining_size -= PAGE_SIZE;
+    }
+
+    // Last memcpy
+    memory = GetPointer(current_address);
+    std::memcpy(destination, memory, remaining_size);
+    if (!memory) return boost::none;
+
+    return boost::make_optional(object);
+}
+
+/**
+* Injects a object into memory. Returns false if address is invalid.
+*/
+template <typename T>
+bool InjectIntoMemory(VAddr address, const T& object) {
+    static_assert(std::is_standard_layout<T>::value, "Type must have standard layout");
+
+    u8* memory = GetPointer(address);
+    if (!memory) {
+        return false;
+    }
+
+    std::memcpy(memory, &object, sizeof(T));
+    return true;
+}
+
+/**
 * Converts a virtual address inside a region with 1:1 mapping to physical memory to a physical
 * address. This should be used by services to translate addresses for use by the hardware.
 */
