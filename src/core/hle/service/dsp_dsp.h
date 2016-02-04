@@ -23,7 +23,10 @@ public:
     }
 };
 
-/// Signals that a DSP interrupt has occurred to userland code
-void SignalInterrupt();
+/// Signal all audio related interrupts.
+void SignalAllInterrupts();
+
+/// Signal a specific audio related interrupt based on interrupt id and channel id.
+void SignalInterrupt(u32 interrupt, u32 channel);
 
 } // namespace
