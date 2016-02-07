@@ -435,5 +435,9 @@ void Shutdown();
 /// This function is called before triggering the audio interrupt.
 void Tick();
 
+/// Returns a mutable reference to the current region.
+/// Current region is selected based on the frame counter.
+SharedMemory& CurrentRegion();
+
 } // namespace HLE
 } // namespace DSP

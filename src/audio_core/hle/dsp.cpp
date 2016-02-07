@@ -29,5 +29,24 @@ void Tick() {
     // STUB
 }
 
+// The region with the higher frame counter is chosen unless there is wraparound.
+SharedMemory& CurrentRegion() {
+    if (region0.frame_counter == 0xFFFFu && region1.frame_counter != 0xFFFEu) {
+        // Wraparound has occured.
+        return region1;
+    }
+
+    if (region1.frame_counter == 0xFFFFu && region0.frame_counter != 0xFFFEu) {
+        // Wraparound has occured.
+        return region0;
+    }
+
+    if (region0.frame_counter > region1.frame_counter) {
+        return region0;
+    } else {
+        return region1;
+    }
+}
+
 } // namespace HLE
 } // namespace DSP
