@@ -16,7 +16,7 @@ namespace HLE {
 
 static size_t pipe2position = 0;
 
-void DSP::HLE::ResetPipes() {
+void ResetPipes() {
     pipe2position = 0;
 }
 
@@ -46,7 +46,7 @@ std::vector<u8> PipeRead(u32 pipe_number, u32 length) {
     return ret;
 }
 
-void DSP::HLE::PipeWrite(u32 pipe_number, const std::vector<u8>& buffer) {
+void PipeWrite(u32 pipe_number, const std::vector<u8>& buffer) {
     // TODO: proper pipe behaviour
 }
 

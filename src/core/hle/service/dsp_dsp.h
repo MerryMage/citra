@@ -26,7 +26,12 @@ public:
 /// Signal all audio related interrupts.
 void SignalAllInterrupts();
 
-/// Signal a specific audio related interrupt based on interrupt id and channel id.
-void SignalInterrupt(u32 interrupt, u32 channel);
+/**
+ * Signal a specific audio related interrupt based on interrupt id and channel id.
+ * @param interrupt_id The interrupt id
+ * @param channel_id The channel id
+ * The significance of various values of interrupt_id and channel_id is not yet known.
+ */
+void SignalInterrupt(u32 interrupt_id, u32 channel_id);
 
 } // namespace
