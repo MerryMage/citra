@@ -5,20 +5,22 @@
 #include <array>
 #include <vector>
 
+#include "audio_core/hle/dsp.h"
 #include "audio_core/hle/pipe.h"
 
 #include "common/common_types.h"
 #include "common/logging/log.h"
 
+namespace DSP {
+namespace HLE {
+
 static size_t pipe2position = 0;
 
-/**
- * pipe_number = 0: Debug
- * pipe_number = 1: P-DMA
- * pipe_number = 2: Audio
- * pipe_number = 3: Binary
- */
-std::vector<u8> DSP::HLE::PipeRead(u32 pipe_number, u32 length) {
+void DSP::HLE::ResetPipes() {
+    pipe2position = 0;
+}
+
+std::vector<u8> PipeRead(u32 pipe_number, u32 length) {
     if (pipe_number != 2) {
         LOG_WARNING(Audio_DSP, "pipe_number = %u (!= 2), unimplemented", pipe_number);
         return {}; // We currently don't handle anything other than the audio pipe.
@@ -47,3 +49,6 @@ std::vector<u8> DSP::HLE::PipeRead(u32 pipe_number, u32 length) {
 void DSP::HLE::PipeWrite(u32 pipe_number, const std::vector<u8>& buffer) {
     // TODO: proper pipe behaviour
 }
+
+} // namespace HLE
+} // namespace DSP

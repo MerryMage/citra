@@ -25,17 +25,13 @@ struct PairHash {
     }
 };
 
-/// Map of (audio interrupt #, channel number) to Kernel::Events.
-/// See: RegisterInterruptEvents
+/// Map of (audio interrupt number, channel number) to Kernel::Events. See: RegisterInterruptEvents
 static std::unordered_map<std::pair<u32, u32>, Kernel::SharedPtr<Kernel::Event>, PairHash> interrupt_events;
 
-/**
-* DSP Interrupts:
-* Interrupt #2 occurs every frame tick. Userland programs normally have a thread that's waiting
-* for an interrupt event. Immediately after this interrupt event, userland normally updates the
-* state in the next region and increments the relevant frame counter by two.
-*/
-
+// DSP Interrupts:
+// Interrupt #2 occurs every frame tick. Userland programs normally have a thread that's waiting
+// for an interrupt event. Immediately after this interrupt event, userland normally updates the
+// state in the next region and increments the relevant frame counter by two.
 void SignalAllInterrupts() {
     // HACK: The other interrupts have currently unknown purpose, we trigger them each tick in any case.
     for (auto& interrupt_event : interrupt_events)
@@ -62,7 +58,7 @@ static void ConvertProcessAddressFromDspDram(Service::Interface* self) {
     cmd_buff[1] = 0; // No error
     cmd_buff[2] = (addr << 1) + (Memory::DSP_RAM_VADDR + 0x40000);
 
-    LOG_WARNING(Service_DSP, "(STUBBED) called with address 0x%08X", addr);
+    LOG_DEBUG(Service_DSP, "called with address 0x%08X", addr);
 }
 
 /**
@@ -140,7 +136,7 @@ static void FlushDataCache(Service::Interface* self) {
 /**
  * DSP_DSP::RegisterInterruptEvents service function
  *  Inputs:
- *      1 : Interrupt #
+ *      1 : Interrupt Number
  *      2 : Channel Number
  *      4 : Interrupt event handle
  *  Outputs:
@@ -224,8 +220,11 @@ static void WriteProcessPipe(Service::Interface* self) {
 
 /**
  * DSP_DSP::ReadPipeIfPossible service function
+ *      A pipe is a means of communication between the ARM11 and DSP that occurs on
+ *      hardware by writing to/reading from the DSP registers at 0x10203000.
+ *      Pipes are used for initialisation. See also DSP::HLE::PipeRead.
  *  Inputs:
- *      1 : Pipe
+ *      1 : Pipe Number
  *      2 : Unknown
  *      3 : Size in bytes of read (observed only lower half word used)
  *      0x41 : Virtual address to read from DSP pipe to in memory

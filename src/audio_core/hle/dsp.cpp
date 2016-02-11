@@ -7,6 +7,7 @@
 #include <type_traits>
 
 #include "audio_core/hle/dsp.h"
+#include "audio_core/hle/pipe.h"
 
 #include "core/core_timing.h"
 #include "core/mmio.h"
@@ -14,38 +15,34 @@
 namespace DSP {
 namespace HLE {
 
-SharedMemory region0;
-SharedMemory region1;
+SharedMemory g_region0;
+SharedMemory g_region1;
 
 void Init() {
-    // STUB
+    DSP::HLE::ResetPipes();
 }
 
 void Shutdown() {
-    // STUB
 }
 
-void Tick() {
-    // STUB
+bool Tick() {
+    return true;
 }
 
-// The region with the higher frame counter is chosen unless there is wraparound.
 SharedMemory& CurrentRegion() {
-    if (region0.frame_counter == 0xFFFFu && region1.frame_counter != 0xFFFEu) {
+    // The region with the higher frame counter is chosen unless there is wraparound.
+
+    if (g_region0.frame_counter == 0xFFFFu && g_region1.frame_counter != 0xFFFEu) {
         // Wraparound has occured.
-        return region1;
+        return g_region1;
     }
 
-    if (region1.frame_counter == 0xFFFFu && region0.frame_counter != 0xFFFEu) {
+    if (g_region1.frame_counter == 0xFFFFu && g_region0.frame_counter != 0xFFFEu) {
         // Wraparound has occured.
-        return region0;
+        return g_region0;
     }
 
-    if (region0.frame_counter > region1.frame_counter) {
-        return region0;
-    } else {
-        return region1;
-    }
+    return (g_region0.frame_counter > g_region1.frame_counter) ? g_region0 : g_region1;
 }
 
 } // namespace HLE

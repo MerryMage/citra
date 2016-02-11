@@ -21,7 +21,10 @@ public:
     /// The native rate of this sink. The sink expects to be fed samples that respect this. (Units: samples/sec)
     virtual float GetNativeSampleRate() const = 0;
 
-    /// Feed stereo samples to sink. Samples are interleaved stereo PCM16.
+    /**
+     * Feed stereo samples to sink.
+     * @param samples Samples in interleaved stereo PCM16 format. Size of vector must be multiple of two.
+     */
     virtual void EnqueueSamples(const std::vector<s16>& samples) = 0;
 
     /// Samples enqueued that have not been played yet.
