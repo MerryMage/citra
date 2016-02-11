@@ -33,7 +33,7 @@ struct PicaShaderConfig {
         PicaShaderConfig res;
         const auto& regs = Pica::g_state.regs;
 
-        res.alpha_test_func = regs.output_merger.alpha_test.enable ?
+        res.alpha_test_func = regs.output_merger.alpha_test.enable.Value() ?
             regs.output_merger.alpha_test.func.Value() : Pica::Regs::CompareFunc::Always;
 
         // Copy relevant TevStageConfig fields only. We're doing this manually (instead of calling

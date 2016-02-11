@@ -38,7 +38,7 @@ void Setup(UnitState<false>& state) {
     if (VideoCore::g_shader_jit_enabled) {
         u64 cache_key = (Common::ComputeHash64(&g_state.vs.program_code, sizeof(g_state.vs.program_code)) ^
             Common::ComputeHash64(&g_state.vs.swizzle_data, sizeof(g_state.vs.swizzle_data)) ^
-            g_state.regs.vs.main_offset);
+            g_state.regs.vs.main_offset.Value());
 
         auto iter = shader_map.find(cache_key);
         if (iter != shader_map.end()) {
@@ -66,7 +66,7 @@ OutputVertex Run(UnitState<false>& state, const InputVertex& input, int num_attr
     Common::Profiling::ScopeTimer timer(shader_category);
     MICROPROFILE_SCOPE(GPU_VertexShader);
 
-    state.program_counter = config.main_offset;
+    state.program_counter = config.main_offset.Value();
     state.debug.max_offset = 0;
     state.debug.max_opdesc_id = 0;
 
@@ -75,22 +75,22 @@ OutputVertex Run(UnitState<false>& state, const InputVertex& input, int num_attr
 
     // TODO: Instead of this cumbersome logic, just load the input data directly like
     // for (int attr = 0; attr < num_attributes; ++attr) { input_attr[0] = state.registers.input[attribute_register_map.attribute0_register]; }
-    if (num_attributes > 0) state.registers.input[attribute_register_map.attribute0_register] = input.attr[0];
-    if (num_attributes > 1) state.registers.input[attribute_register_map.attribute1_register] = input.attr[1];
-    if (num_attributes > 2) state.registers.input[attribute_register_map.attribute2_register] = input.attr[2];
-    if (num_attributes > 3) state.registers.input[attribute_register_map.attribute3_register] = input.attr[3];
-    if (num_attributes > 4) state.registers.input[attribute_register_map.attribute4_register] = input.attr[4];
-    if (num_attributes > 5) state.registers.input[attribute_register_map.attribute5_register] = input.attr[5];
-    if (num_attributes > 6) state.registers.input[attribute_register_map.attribute6_register] = input.attr[6];
-    if (num_attributes > 7) state.registers.input[attribute_register_map.attribute7_register] = input.attr[7];
-    if (num_attributes > 8) state.registers.input[attribute_register_map.attribute8_register] = input.attr[8];
-    if (num_attributes > 9) state.registers.input[attribute_register_map.attribute9_register] = input.attr[9];
-    if (num_attributes > 10) state.registers.input[attribute_register_map.attribute10_register] = input.attr[10];
-    if (num_attributes > 11) state.registers.input[attribute_register_map.attribute11_register] = input.attr[11];
-    if (num_attributes > 12) state.registers.input[attribute_register_map.attribute12_register] = input.attr[12];
-    if (num_attributes > 13) state.registers.input[attribute_register_map.attribute13_register] = input.attr[13];
-    if (num_attributes > 14) state.registers.input[attribute_register_map.attribute14_register] = input.attr[14];
-    if (num_attributes > 15) state.registers.input[attribute_register_map.attribute15_register] = input.attr[15];
+    if (num_attributes > 0) state.registers.input[attribute_register_map.attribute0_register.Value()] = input.attr[0];
+    if (num_attributes > 1) state.registers.input[attribute_register_map.attribute1_register.Value()] = input.attr[1];
+    if (num_attributes > 2) state.registers.input[attribute_register_map.attribute2_register.Value()] = input.attr[2];
+    if (num_attributes > 3) state.registers.input[attribute_register_map.attribute3_register.Value()] = input.attr[3];
+    if (num_attributes > 4) state.registers.input[attribute_register_map.attribute4_register.Value()] = input.attr[4];
+    if (num_attributes > 5) state.registers.input[attribute_register_map.attribute5_register.Value()] = input.attr[5];
+    if (num_attributes > 6) state.registers.input[attribute_register_map.attribute6_register.Value()] = input.attr[6];
+    if (num_attributes > 7) state.registers.input[attribute_register_map.attribute7_register.Value()] = input.attr[7];
+    if (num_attributes > 8) state.registers.input[attribute_register_map.attribute8_register.Value()] = input.attr[8];
+    if (num_attributes > 9) state.registers.input[attribute_register_map.attribute9_register.Value()] = input.attr[9];
+    if (num_attributes > 10) state.registers.input[attribute_register_map.attribute10_register.Value()] = input.attr[10];
+    if (num_attributes > 11) state.registers.input[attribute_register_map.attribute11_register.Value()] = input.attr[11];
+    if (num_attributes > 12) state.registers.input[attribute_register_map.attribute12_register.Value()] = input.attr[12];
+    if (num_attributes > 13) state.registers.input[attribute_register_map.attribute13_register.Value()] = input.attr[13];
+    if (num_attributes > 14) state.registers.input[attribute_register_map.attribute14_register.Value()] = input.attr[14];
+    if (num_attributes > 15) state.registers.input[attribute_register_map.attribute15_register.Value()] = input.attr[15];
 
     state.conditional_code[0] = false;
     state.conditional_code[1] = false;
@@ -112,8 +112,8 @@ OutputVertex Run(UnitState<false>& state, const InputVertex& input, int num_attr
         const auto& output_register_map = g_state.regs.vs_output_attributes[i]; // TODO: Don't hardcode VS here
 
         u32 semantics[4] = {
-            output_register_map.map_x, output_register_map.map_y,
-            output_register_map.map_z, output_register_map.map_w
+            output_register_map.map_x.Value(), output_register_map.map_y.Value(),
+            output_register_map.map_z.Value(), output_register_map.map_w.Value()
         };
 
         for (int comp = 0; comp < 4; ++comp) {
@@ -146,7 +146,7 @@ OutputVertex Run(UnitState<false>& state, const InputVertex& input, int num_attr
 DebugData<true> ProduceDebugInfo(const InputVertex& input, int num_attributes, const Regs::ShaderConfig& config, const State::ShaderSetup& setup) {
     UnitState<true> state;
 
-    state.program_counter = config.main_offset;
+    state.program_counter = config.main_offset.Value();
     state.debug.max_offset = 0;
     state.debug.max_opdesc_id = 0;
 
@@ -155,22 +155,22 @@ DebugData<true> ProduceDebugInfo(const InputVertex& input, int num_attributes, c
     float24 dummy_register;
     boost::fill(state.registers.input, &dummy_register);
 
-    if (num_attributes > 0) state.registers.input[attribute_register_map.attribute0_register] = &input.attr[0].x;
-    if (num_attributes > 1) state.registers.input[attribute_register_map.attribute1_register] = &input.attr[1].x;
-    if (num_attributes > 2) state.registers.input[attribute_register_map.attribute2_register] = &input.attr[2].x;
-    if (num_attributes > 3) state.registers.input[attribute_register_map.attribute3_register] = &input.attr[3].x;
-    if (num_attributes > 4) state.registers.input[attribute_register_map.attribute4_register] = &input.attr[4].x;
-    if (num_attributes > 5) state.registers.input[attribute_register_map.attribute5_register] = &input.attr[5].x;
-    if (num_attributes > 6) state.registers.input[attribute_register_map.attribute6_register] = &input.attr[6].x;
-    if (num_attributes > 7) state.registers.input[attribute_register_map.attribute7_register] = &input.attr[7].x;
-    if (num_attributes > 8) state.registers.input[attribute_register_map.attribute8_register] = &input.attr[8].x;
-    if (num_attributes > 9) state.registers.input[attribute_register_map.attribute9_register] = &input.attr[9].x;
-    if (num_attributes > 10) state.registers.input[attribute_register_map.attribute10_register] = &input.attr[10].x;
-    if (num_attributes > 11) state.registers.input[attribute_register_map.attribute11_register] = &input.attr[11].x;
-    if (num_attributes > 12) state.registers.input[attribute_register_map.attribute12_register] = &input.attr[12].x;
-    if (num_attributes > 13) state.registers.input[attribute_register_map.attribute13_register] = &input.attr[13].x;
-    if (num_attributes > 14) state.registers.input[attribute_register_map.attribute14_register] = &input.attr[14].x;
-    if (num_attributes > 15) state.registers.input[attribute_register_map.attribute15_register] = &input.attr[15].x;
+    if (num_attributes > 0) state.registers.input[attribute_register_map.attribute0_register.Value()] = &input.attr[0].x;
+    if (num_attributes > 1) state.registers.input[attribute_register_map.attribute1_register.Value()] = &input.attr[1].x;
+    if (num_attributes > 2) state.registers.input[attribute_register_map.attribute2_register.Value()] = &input.attr[2].x;
+    if (num_attributes > 3) state.registers.input[attribute_register_map.attribute3_register.Value()] = &input.attr[3].x;
+    if (num_attributes > 4) state.registers.input[attribute_register_map.attribute4_register.Value()] = &input.attr[4].x;
+    if (num_attributes > 5) state.registers.input[attribute_register_map.attribute5_register.Value()] = &input.attr[5].x;
+    if (num_attributes > 6) state.registers.input[attribute_register_map.attribute6_register.Value()] = &input.attr[6].x;
+    if (num_attributes > 7) state.registers.input[attribute_register_map.attribute7_register.Value()] = &input.attr[7].x;
+    if (num_attributes > 8) state.registers.input[attribute_register_map.attribute8_register.Value()] = &input.attr[8].x;
+    if (num_attributes > 9) state.registers.input[attribute_register_map.attribute9_register.Value()] = &input.attr[9].x;
+    if (num_attributes > 10) state.registers.input[attribute_register_map.attribute10_register.Value()] = &input.attr[10].x;
+    if (num_attributes > 11) state.registers.input[attribute_register_map.attribute11_register.Value()] = &input.attr[11].x;
+    if (num_attributes > 12) state.registers.input[attribute_register_map.attribute12_register.Value()] = &input.attr[12].x;
+    if (num_attributes > 13) state.registers.input[attribute_register_map.attribute13_register.Value()] = &input.attr[13].x;
+    if (num_attributes > 14) state.registers.input[attribute_register_map.attribute14_register.Value()] = &input.attr[14].x;
+    if (num_attributes > 15) state.registers.input[attribute_register_map.attribute15_register.Value()] = &input.attr[15].x;
 
     state.conditional_code[0] = false;
     state.conditional_code[1] = false;

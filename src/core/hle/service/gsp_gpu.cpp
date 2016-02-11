@@ -210,7 +210,7 @@ void SetBufferSwap(u32 screen_id, const FrameBufferInfo& info) {
     u32 base_address = 0x400000;
     PAddr phys_address_left = Memory::VirtualToPhysicalAddress(info.address_left);
     PAddr phys_address_right = Memory::VirtualToPhysicalAddress(info.address_right);
-    if (info.active_fb == 0) {
+    if (info.active_fb.Value() == 0) {
         WriteHWRegs(base_address + 4 * static_cast<u32>(GPU_REG_INDEX(framebuffer_config[screen_id].address_left1)), 4,
                 &phys_address_left);
         WriteHWRegs(base_address + 4 * static_cast<u32>(GPU_REG_INDEX(framebuffer_config[screen_id].address_right1)), 4,
@@ -345,9 +345,9 @@ void SignalInterrupt(InterruptId interrupt_id) {
         int screen_id = (interrupt_id == InterruptId::PDC0) ? 0 : (interrupt_id == InterruptId::PDC1) ? 1 : -1;
         if (screen_id != -1) {
             FrameBufferUpdate* info = GetFrameBufferInfo(thread_id, screen_id);
-            if (info->is_dirty) {
-                SetBufferSwap(screen_id, info->framebuffer_info[info->index]);
-                info->is_dirty = false;
+            if (info->is_dirty.ToBool()) {
+                SetBufferSwap(screen_id, info->framebuffer_info[info->index.Value()]);
+                info->is_dirty.Assign(false);
             }
         }
     }
@@ -361,7 +361,7 @@ static void ExecuteCommand(const Command& command, u32 thread_id) {
         GPU::Write<u32>(0x1EF00000 + 4 * id, data);
     };
 
-    switch (command.id) {
+    switch (command.id.Value()) {
 
     // GX request DMA - typically used for copying memory from GSP heap to VRAM
     case CommandId::REQUEST_DMA:
@@ -499,7 +499,7 @@ static void SetLcdForceBlack(Service::Interface* self) {
 
     // Since data is already zeroed, there is no need to explicitly set
     // the color to black (all zero).
-    data.is_enabled = enable_black;
+    data.is_enabled.Assign(enable_black);
 
     LCD::Write(HW::VADDR_LCD + 4 * LCD_REG_INDEX(color_fill_top), data.raw); // Top LCD
     LCD::Write(HW::VADDR_LCD + 4 * LCD_REG_INDEX(color_fill_bottom), data.raw); // Bottom LCD
@@ -514,14 +514,14 @@ static void TriggerCmdReqQueue(Service::Interface* self) {
         CommandBuffer* command_buffer = (CommandBuffer*)GetCommandBuffer(thread_id);
 
         // Iterate through each command...
-        for (unsigned i = 0; i < command_buffer->number_commands; ++i) {
+        for (unsigned i = 0; i < command_buffer->number_commands.Value(); ++i) {
             g_debugger.GXCommandProcessed((u8*)&command_buffer->commands[i]);
 
             // Decode and execute command
             ExecuteCommand(command_buffer->commands[i], thread_id);
 
             // Indicates that command has completed
-            command_buffer->number_commands = command_buffer->number_commands - 1;
+            command_buffer->number_commands.Assign(command_buffer->number_commands.Value() - 1);
         }
     }
 
@@ -559,15 +559,15 @@ static void ImportDisplayCaptureInfo(Service::Interface* self) {
     FrameBufferUpdate* top_screen = GetFrameBufferInfo(thread_id, 0);
     FrameBufferUpdate* bottom_screen = GetFrameBufferInfo(thread_id, 1);
 
-    cmd_buff[2] = top_screen->framebuffer_info[top_screen->index].address_left;
-    cmd_buff[3] = top_screen->framebuffer_info[top_screen->index].address_right;
-    cmd_buff[4] = top_screen->framebuffer_info[top_screen->index].format;
-    cmd_buff[5] = top_screen->framebuffer_info[top_screen->index].stride;
+    cmd_buff[2] = top_screen->framebuffer_info[top_screen->index.Value()].address_left;
+    cmd_buff[3] = top_screen->framebuffer_info[top_screen->index.Value()].address_right;
+    cmd_buff[4] = top_screen->framebuffer_info[top_screen->index.Value()].format;
+    cmd_buff[5] = top_screen->framebuffer_info[top_screen->index.Value()].stride;
 
-    cmd_buff[6] = bottom_screen->framebuffer_info[bottom_screen->index].address_left;
-    cmd_buff[7] = bottom_screen->framebuffer_info[bottom_screen->index].address_right;
-    cmd_buff[8] = bottom_screen->framebuffer_info[bottom_screen->index].format;
-    cmd_buff[9] = bottom_screen->framebuffer_info[bottom_screen->index].stride;
+    cmd_buff[6] = bottom_screen->framebuffer_info[bottom_screen->index.Value()].address_left;
+    cmd_buff[7] = bottom_screen->framebuffer_info[bottom_screen->index.Value()].address_right;
+    cmd_buff[8] = bottom_screen->framebuffer_info[bottom_screen->index.Value()].format;
+    cmd_buff[9] = bottom_screen->framebuffer_info[bottom_screen->index.Value()].stride;
 
     cmd_buff[1] = RESULT_SUCCESS.raw;
 

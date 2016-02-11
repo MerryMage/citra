@@ -101,7 +101,7 @@ void Init() {
     FileSys::Path archive_path(ptm_shared_extdata_id);
     auto archive_result = Service::FS::OpenArchive(Service::FS::ArchiveIdCode::SharedExtSaveData, archive_path);
     // If the archive didn't exist, create the files inside
-    if (archive_result.Code().description == ErrorDescription::FS_NotFormatted) {
+    if (archive_result.Code().description.Value() == ErrorDescription::FS_NotFormatted) {
         // Format the archive to create the directories
         Service::FS::FormatArchive(Service::FS::ArchiveIdCode::SharedExtSaveData, archive_path);
         // Open it again to get a valid archive now that the folder exists
@@ -110,8 +110,8 @@ void Init() {
 
         FileSys::Path gamecoin_path("gamecoin.dat");
         FileSys::Mode open_mode = {};
-        open_mode.write_flag = 1;
-        open_mode.create_flag = 1;
+        open_mode.write_flag.Assign(1);
+        open_mode.create_flag.Assign(1);
         // Open the file and write the default gamecoin information
         auto gamecoin_result = Service::FS::OpenFileFromArchive(*archive_result, gamecoin_path, open_mode);
         if (gamecoin_result.Succeeded()) {

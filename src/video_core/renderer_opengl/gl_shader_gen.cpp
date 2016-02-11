@@ -13,14 +13,14 @@ namespace GLShader {
 
 /// Detects if a TEV stage is configured to be skipped (to avoid generating unnecessary code)
 static bool IsPassThroughTevStage(const TevStageConfig& stage) {
-    return (stage.color_op             == TevStageConfig::Operation::Replace &&
-            stage.alpha_op             == TevStageConfig::Operation::Replace &&
-            stage.color_source1        == TevStageConfig::Source::Previous &&
-            stage.alpha_source1        == TevStageConfig::Source::Previous &&
-            stage.color_modifier1      == TevStageConfig::ColorModifier::SourceColor &&
-            stage.alpha_modifier1      == TevStageConfig::AlphaModifier::SourceAlpha &&
-            stage.GetColorMultiplier() == 1 &&
-            stage.GetAlphaMultiplier() == 1);
+    return (stage.color_op.Value()        == TevStageConfig::Operation::Replace &&
+            stage.alpha_op.Value()        == TevStageConfig::Operation::Replace &&
+            stage.color_source1.Value()   == TevStageConfig::Source::Previous &&
+            stage.alpha_source1.Value()   == TevStageConfig::Source::Previous &&
+            stage.color_modifier1.Value() == TevStageConfig::ColorModifier::SourceColor &&
+            stage.alpha_modifier1.Value() == TevStageConfig::AlphaModifier::SourceAlpha &&
+            stage.GetColorMultiplier()    == 1 &&
+            stage.GetAlphaMultiplier()    == 1);
 }
 
 /// Writes the specified TEV stage source component(s)
@@ -283,27 +283,27 @@ static void WriteTevStage(std::string& out, const PicaShaderConfig& config, unsi
         std::string index_name = std::to_string(index);
 
         out += "vec3 color_results_" + index_name + "[3] = vec3[3](";
-        AppendColorModifier(out, stage.color_modifier1, stage.color_source1, index_name);
+        AppendColorModifier(out, stage.color_modifier1.Value(), stage.color_source1.Value(), index_name);
         out += ", ";
-        AppendColorModifier(out, stage.color_modifier2, stage.color_source2, index_name);
+        AppendColorModifier(out, stage.color_modifier2.Value(), stage.color_source2.Value(), index_name);
         out += ", ";
-        AppendColorModifier(out, stage.color_modifier3, stage.color_source3, index_name);
+        AppendColorModifier(out, stage.color_modifier3.Value(), stage.color_source3.Value(), index_name);
         out += ");\n";
 
         out += "vec3 color_output_" + index_name + " = ";
-        AppendColorCombiner(out, stage.color_op, "color_results_" + index_name);
+        AppendColorCombiner(out, stage.color_op.Value(), "color_results_" + index_name);
         out += ";\n";
 
         out += "float alpha_results_" + index_name + "[3] = float[3](";
-        AppendAlphaModifier(out, stage.alpha_modifier1, stage.alpha_source1, index_name);
+        AppendAlphaModifier(out, stage.alpha_modifier1.Value(), stage.alpha_source1.Value(), index_name);
         out += ", ";
-        AppendAlphaModifier(out, stage.alpha_modifier2, stage.alpha_source2, index_name);
+        AppendAlphaModifier(out, stage.alpha_modifier2.Value(), stage.alpha_source2.Value(), index_name);
         out += ", ";
-        AppendAlphaModifier(out, stage.alpha_modifier3, stage.alpha_source3, index_name);
+        AppendAlphaModifier(out, stage.alpha_modifier3.Value(), stage.alpha_source3.Value(), index_name);
         out += ");\n";
 
         out += "float alpha_output_" + index_name + " = ";
-        AppendAlphaCombiner(out, stage.alpha_op, "alpha_results_" + index_name);
+        AppendAlphaCombiner(out, stage.alpha_op.Value(), "alpha_results_" + index_name);
         out += ";\n";
 
         out += "last_tex_env_out = vec4("

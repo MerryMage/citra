@@ -182,10 +182,10 @@ void DumpShader(const std::string& filename, const Regs::ShaderConfig& config, c
             };
 
             for (const auto& semantic : std::vector<OutputAttributes::Semantic>{
-                                                output_attributes[i].map_x,
-                                                output_attributes[i].map_y,
-                                                output_attributes[i].map_z,
-                                                output_attributes[i].map_w     }) {
+                                                output_attributes[i].map_x.Value(),
+                                                output_attributes[i].map_y.Value(),
+                                                output_attributes[i].map_z.Value(),
+                                                output_attributes[i].map_w.Value() }) {
                 if (semantic == OutputAttributes::INVALID)
                     continue;
 
@@ -195,17 +195,17 @@ void DumpShader(const std::string& filename, const Regs::ShaderConfig& config, c
 
                     auto it = std::find_if(output_info_table.begin(), output_info_table.end(),
                                         [&i, &type](const OutputRegisterInfo& info) {
-                                            return info.id == i && info.type == type;
+                                            return info.id.Value() == i && info.type.Value() == type;
                                         }
                                         );
 
                     if (it == output_info_table.end()) {
                         output_info_table.emplace_back();
-                        output_info_table.back().type = type;
-                        output_info_table.back().component_mask = component_mask;
-                        output_info_table.back().id = i;
+                        output_info_table.back().type.Assign(type);
+                        output_info_table.back().component_mask.Assign(component_mask);
+                        output_info_table.back().id.Assign(i);
                     } else {
-                        it->component_mask = it->component_mask | component_mask;
+                        it->component_mask.Assign(it->component_mask.Value() | component_mask);
                     }
                 } catch (const std::out_of_range& ) {
                     DEBUG_ASSERT_MSG(false, "Unknown output attribute mapping");
@@ -244,7 +244,7 @@ void DumpShader(const std::string& filename, const Regs::ShaderConfig& config, c
         QueueForWriting((u8*)&dummy, sizeof(dummy));
     }
 
-    dvle.main_offset_words = config.main_offset;
+    dvle.main_offset_words = config.main_offset.Value();
     dvle.output_register_table_offset = write_offset - dvlb.dvle_offset;
     dvle.output_register_table_size = static_cast<u32>(output_info_table.size());
     QueueForWriting((u8*)output_info_table.data(), static_cast<u32>(output_info_table.size() * sizeof(OutputRegisterInfo)));
@@ -502,11 +502,11 @@ const Math::Vec4<u8> LookupTexture(const u8* source, int x, int y, const Texture
             BitField<16, 16, u64> negation_flags;
 
             unsigned GetTableSubIndex(unsigned index) const {
-                return (table_subindexes >> index) & 1;
+                return (table_subindexes.Value() >> index) & 1;
             }
 
             bool GetNegationFlag(unsigned index) const {
-                return ((negation_flags >> index) & 1) == 1;
+                return ((negation_flags.Value() >> index) & 1) == 1;
             }
 
             BitField<32, 1, u64> flip;
@@ -541,32 +541,32 @@ const Math::Vec4<u8> LookupTexture(const u8* source, int x, int y, const Texture
             const Math::Vec3<u8> GetRGB(int x, int y) const {
                 int texel = 4 * x + y;
 
-                if (flip)
+                if (flip.ToBool())
                     std::swap(x, y);
 
                 // Lookup base value
                 Math::Vec3<int> ret;
-                if (differential_mode) {
-                    ret.r() = static_cast<int>(differential.r);
-                    ret.g() = static_cast<int>(differential.g);
-                    ret.b() = static_cast<int>(differential.b);
+                if (differential_mode.ToBool()) {
+                    ret.r() = static_cast<int>(differential.r.Value());
+                    ret.g() = static_cast<int>(differential.g.Value());
+                    ret.b() = static_cast<int>(differential.b.Value());
                     if (x >= 2) {
-                        ret.r() += static_cast<int>(differential.dr);
-                        ret.g() += static_cast<int>(differential.dg);
-                        ret.b() += static_cast<int>(differential.db);
+                        ret.r() += static_cast<int>(differential.dr.Value());
+                        ret.g() += static_cast<int>(differential.dg.Value());
+                        ret.b() += static_cast<int>(differential.db.Value());
                     }
                     ret.r() = Color::Convert5To8(ret.r());
                     ret.g() = Color::Convert5To8(ret.g());
                     ret.b() = Color::Convert5To8(ret.b());
                 } else {
                     if (x < 2) {
-                        ret.r() = Color::Convert4To8(static_cast<u8>(separate.r1));
-                        ret.g() = Color::Convert4To8(static_cast<u8>(separate.g1));
-                        ret.b() = Color::Convert4To8(static_cast<u8>(separate.b1));
+                        ret.r() = Color::Convert4To8(static_cast<u8>(separate.r1.Value()));
+                        ret.g() = Color::Convert4To8(static_cast<u8>(separate.g1.Value()));
+                        ret.b() = Color::Convert4To8(static_cast<u8>(separate.b1.Value()));
                     } else {
-                        ret.r() = Color::Convert4To8(static_cast<u8>(separate.r2));
-                        ret.g() = Color::Convert4To8(static_cast<u8>(separate.g2));
-                        ret.b() = Color::Convert4To8(static_cast<u8>(separate.b2));
+                        ret.r() = Color::Convert4To8(static_cast<u8>(separate.r2.Value()));
+                        ret.g() = Color::Convert4To8(static_cast<u8>(separate.g2.Value()));
+                        ret.b() = Color::Convert4To8(static_cast<u8>(separate.b2.Value()));
                     }
                 }
 
@@ -607,8 +607,8 @@ TextureInfo TextureInfo::FromPicaRegister(const Regs::TextureConfig& config,
 {
     TextureInfo info;
     info.physical_address = config.GetPhysicalAddress();
-    info.width = config.width;
-    info.height = config.height;
+    info.width = config.width.Value();
+    info.height = config.height.Value();
     info.format = format;
     info.stride = Pica::Regs::NibblesPerPixel(info.format) * info.width / 2;
     return info;
@@ -624,7 +624,7 @@ void DumpTexture(const Pica::Regs::TextureConfig& texture_config, u8* data) {
     // Write data to file
     static int dump_index = 0;
     std::string filename = std::string("texture_dump") + std::to_string(++dump_index) + std::string(".png");
-    u32 row_stride = texture_config.width * 3;
+    u32 row_stride = texture_config.width.Value() * 3;
 
     u8* buf;
 
@@ -660,7 +660,7 @@ void DumpTexture(const Pica::Regs::TextureConfig& texture_config, u8* data) {
     png_init_io(png_ptr, fp.GetHandle());
 
     // Write header (8 bit color depth)
-    png_set_IHDR(png_ptr, info_ptr, texture_config.width, texture_config.height,
+    png_set_IHDR(png_ptr, info_ptr, texture_config.width.Value(), texture_config.height.Value(),
         8, PNG_COLOR_TYPE_RGB /*_ALPHA*/, PNG_INTERLACE_NONE,
         PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 
@@ -672,14 +672,14 @@ void DumpTexture(const Pica::Regs::TextureConfig& texture_config, u8* data) {
 
     png_write_info(png_ptr, info_ptr);
 
-    buf = new u8[row_stride * texture_config.height];
-    for (unsigned y = 0; y < texture_config.height; ++y) {
-        for (unsigned x = 0; x < texture_config.width; ++x) {
+    buf = new u8[row_stride * texture_config.height.Value()];
+    for (unsigned y = 0; y < texture_config.height.Value(); ++y) {
+        for (unsigned x = 0; x < texture_config.width.Value(); ++x) {
             TextureInfo info;
-            info.width = texture_config.width;
-            info.height = texture_config.height;
+            info.width = texture_config.width.Value();
+            info.height = texture_config.height.Value();
             info.stride = row_stride;
-            info.format = g_state.regs.texture0_format;
+            info.format = g_state.regs.texture0_format.Value();
             Math::Vec4<u8> texture_color = LookupTexture(data, x, y, info);
             buf[3 * x + y * row_stride    ] = texture_color.r();
             buf[3 * x + y * row_stride + 1] = texture_color.g();
@@ -688,7 +688,7 @@ void DumpTexture(const Pica::Regs::TextureConfig& texture_config, u8* data) {
     }
 
     // Write image data
-    for (unsigned y = 0; y < texture_config.height; ++y)
+    for (unsigned y = 0; y < texture_config.height.Value(); ++y)
     {
         u8* row_ptr = (u8*)buf + y * row_stride;
         png_write_row(png_ptr, row_ptr);
@@ -767,14 +767,14 @@ void DumpTevStageConfig(const std::array<Pica::Regs::TevStageConfig,6>& stages)
                 };
         static auto GetColorCombinerStr =
                 [](const Regs::TevStageConfig& tev_stage) {
-                    auto op_it = combiner_map.find(tev_stage.color_op);
+                    auto op_it = combiner_map.find(tev_stage.color_op.Value());
                     std::string op_str = "Unknown op (%source1, %source2, %source3)";
                     if (op_it != combiner_map.end())
                         op_str = op_it->second;
 
-                    op_str = ReplacePattern(op_str, "%source1", GetColorSourceStr(tev_stage.color_source1, tev_stage.color_modifier1));
-                    op_str = ReplacePattern(op_str, "%source2", GetColorSourceStr(tev_stage.color_source2, tev_stage.color_modifier2));
-                    return   ReplacePattern(op_str, "%source3", GetColorSourceStr(tev_stage.color_source3, tev_stage.color_modifier3));
+                    op_str = ReplacePattern(op_str, "%source1", GetColorSourceStr(tev_stage.color_source1.Value(), tev_stage.color_modifier1.Value()));
+                    op_str = ReplacePattern(op_str, "%source2", GetColorSourceStr(tev_stage.color_source2.Value(), tev_stage.color_modifier2.Value()));
+                    return   ReplacePattern(op_str, "%source3", GetColorSourceStr(tev_stage.color_source3.Value(), tev_stage.color_modifier3.Value()));
                 };
         static auto GetAlphaSourceStr =
                 [](const Source& src, const AlphaModifier& modifier) {
@@ -792,14 +792,14 @@ void DumpTevStageConfig(const std::array<Pica::Regs::TevStageConfig,6>& stages)
                 };
         static auto GetAlphaCombinerStr =
                 [](const Regs::TevStageConfig& tev_stage) {
-                    auto op_it = combiner_map.find(tev_stage.alpha_op);
+                    auto op_it = combiner_map.find(tev_stage.alpha_op.Value());
                     std::string op_str = "Unknown op (%source1, %source2, %source3)";
                     if (op_it != combiner_map.end())
                         op_str = op_it->second;
 
-                    op_str = ReplacePattern(op_str, "%source1", GetAlphaSourceStr(tev_stage.alpha_source1, tev_stage.alpha_modifier1));
-                    op_str = ReplacePattern(op_str, "%source2", GetAlphaSourceStr(tev_stage.alpha_source2, tev_stage.alpha_modifier2));
-                    return   ReplacePattern(op_str, "%source3", GetAlphaSourceStr(tev_stage.alpha_source3, tev_stage.alpha_modifier3));
+                    op_str = ReplacePattern(op_str, "%source1", GetAlphaSourceStr(tev_stage.alpha_source1.Value(), tev_stage.alpha_modifier1.Value()));
+                    op_str = ReplacePattern(op_str, "%source2", GetAlphaSourceStr(tev_stage.alpha_source2.Value(), tev_stage.alpha_modifier2.Value()));
+                    return   ReplacePattern(op_str, "%source3", GetAlphaSourceStr(tev_stage.alpha_source3.Value(), tev_stage.alpha_modifier3.Value()));
                 };
 
         stage_info += "Stage " + std::to_string(index) + ": " + GetColorCombinerStr(tev_stage) + "   " + GetAlphaCombinerStr(tev_stage) + "\n";

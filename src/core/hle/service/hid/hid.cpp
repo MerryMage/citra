@@ -86,10 +86,10 @@ void Update() {
     pad_entry->delta_removals.hex = changed.hex & old_state.hex;;
 
     // Set circle Pad
-    pad_entry->circle_pad_x = state.circle_left  ? -MAX_CIRCLEPAD_POS :
-                              state.circle_right ?  MAX_CIRCLEPAD_POS : 0x0;
-    pad_entry->circle_pad_y = state.circle_down  ? -MAX_CIRCLEPAD_POS :
-                              state.circle_up    ?  MAX_CIRCLEPAD_POS : 0x0;
+    pad_entry->circle_pad_x = state.circle_left.Value()  ? -MAX_CIRCLEPAD_POS :
+                              state.circle_right.Value() ?  MAX_CIRCLEPAD_POS : 0x0;
+    pad_entry->circle_pad_y = state.circle_down.Value()  ? -MAX_CIRCLEPAD_POS :
+                              state.circle_up.Value()    ?  MAX_CIRCLEPAD_POS : 0x0;
 
     // If we just updated index 0, provide a new timestamp
     if (mem->pad.index == 0) {
@@ -105,7 +105,7 @@ void Update() {
     bool pressed = false;
 
     std::tie(touch_entry->x, touch_entry->y, pressed) = VideoCore::g_emu_window->GetTouchState();
-    touch_entry->valid = pressed ? 1 : 0;
+    touch_entry->valid.Assign(pressed ? 1 : 0);
 
     // TODO(bunnei): We're not doing anything with offset 0xA8 + 0x18 of HID SharedMemory, which
     // supposedly is "Touch-screen entry, which contains the raw coordinate data prior to being

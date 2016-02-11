@@ -254,9 +254,9 @@ struct Regs {
     };
     const std::array<FullTextureConfig, 3> GetTextures() const {
         return {{
-                   { texture0_enable.ToBool(), texture0, texture0_format },
-                   { texture1_enable.ToBool(), texture1, texture1_format },
-                   { texture2_enable.ToBool(), texture2, texture2_format }
+                   { texture0_enable.ToBool(), texture0, texture0_format.Value() },
+                   { texture1_enable.ToBool(), texture1, texture1_format.Value() },
+                   { texture2_enable.ToBool(), texture2, texture2_format.Value() }
                }};
     }
 
@@ -357,11 +357,11 @@ struct Regs {
         };
 
         inline unsigned GetColorMultiplier() const {
-            return (color_scale < 3) ? (1 << color_scale) : 1;
+            return (color_scale.Value() < 3) ? (1 << color_scale.Value()) : 1;
         }
 
         inline unsigned GetAlphaMultiplier() const {
-            return (alpha_scale < 3) ? (1 << alpha_scale) : 1;
+            return (alpha_scale.Value() < 3) ? (1 << alpha_scale.Value()) : 1;
         }
     };
 
@@ -381,11 +381,11 @@ struct Regs {
         BitField<12, 4, u32> update_mask_a;
 
         bool TevStageUpdatesCombinerBufferColor(unsigned stage_index) const {
-            return (stage_index < 4) && (update_mask_rgb & (1 << stage_index));
+            return (stage_index < 4) && (update_mask_rgb.Value() & (1 << stage_index));
         }
 
         bool TevStageUpdatesCombinerBufferAlpha(unsigned stage_index) const {
-            return (stage_index < 4) && (update_mask_a & (1 << stage_index));
+            return (stage_index < 4) && (update_mask_a.Value() & (1 << stage_index));
         }
     } tev_combiner_buffer_input;
 
@@ -604,11 +604,11 @@ struct Regs {
         }
 
         inline u32 GetWidth() const {
-            return width;
+            return width.Value();
         }
 
         inline u32 GetHeight() const {
-            return height + 1;
+            return height.Value() + 1;
         }
     } framebuffer;
 
@@ -654,7 +654,7 @@ struct Regs {
         BitField<0, 29, u32> base_address;
 
         u32 GetPhysicalBaseAddress() const {
-            return DecodeAddressRegister(base_address);
+            return DecodeAddressRegister(base_address.Value());
         }
 
         // Descriptor for internal vertex attributes
@@ -692,18 +692,18 @@ struct Regs {
 
         inline VertexAttributeFormat GetFormat(int n) const {
             VertexAttributeFormat formats[] = {
-                format0, format1, format2, format3,
-                format4, format5, format6, format7,
-                format8, format9, format10, format11
+                format0.Value(), format1.Value(), format2.Value(), format3.Value(),
+                format4.Value(), format5.Value(), format6.Value(), format7.Value(),
+                format8.Value(), format9.Value(), format10.Value(), format11.Value()
             };
             return formats[n];
         }
 
         inline int GetNumElements(int n) const {
             u64 sizes[] = {
-                size0, size1, size2, size3,
-                size4, size5, size6, size7,
-                size8, size9, size10, size11
+                size0.Value(), size1.Value(), size2.Value(), size3.Value(),
+                size4.Value(), size5.Value(), size6.Value(), size7.Value(),
+                size8.Value(), size9.Value(), size10.Value(), size11.Value()
             };
             return (int)sizes[n]+1;
         }
@@ -718,11 +718,11 @@ struct Regs {
         }
 
         inline bool IsDefaultAttribute(int id) const {
-            return (id >= 12) || (attribute_mask & (1ULL << id)) != 0;
+            return (id >= 12) || (attribute_mask.Value() & (1ULL << id)) != 0;
         }
 
         inline int GetNumTotalAttributes() const {
-            return (int)num_extra_attributes+1;
+            return (int)num_extra_attributes.Value() +1;
         }
 
         // Attribute loaders map the source vertex data to input attributes
@@ -753,9 +753,9 @@ struct Regs {
 
             inline int GetComponent(int n) const {
                 u64 components[] = {
-                    comp0, comp1, comp2, comp3,
-                    comp4, comp5, comp6, comp7,
-                    comp8, comp9, comp10, comp11
+                    comp0.Value(), comp1.Value(), comp2.Value(), comp3.Value(),
+                    comp4.Value(), comp5.Value(), comp6.Value(), comp7.Value(),
+                    comp8.Value(), comp9.Value(), comp10.Value(), comp11.Value()
                 };
                 return (int)components[n];
             }
@@ -816,12 +816,12 @@ struct Regs {
 
         unsigned GetSize(unsigned index) const {
             ASSERT(index < 2);
-            return 8 * size[index];
+            return 8 * size[index].Value();
         }
 
         PAddr GetPhysicalAddress(unsigned index) const {
             ASSERT(index < 2);
-            return (PAddr)(8 * addr[index]);
+            return (PAddr)(8 * addr[index].Value());
         }
     } command_buffer;
 
@@ -875,10 +875,10 @@ struct Regs {
 
             int GetRegisterForAttribute(int attribute_index) const {
                 u64 fields[] = {
-                    attribute0_register,  attribute1_register,  attribute2_register,  attribute3_register,
-                    attribute4_register,  attribute5_register,  attribute6_register,  attribute7_register,
-                    attribute8_register,  attribute9_register,  attribute10_register, attribute11_register,
-                    attribute12_register, attribute13_register, attribute14_register, attribute15_register,
+                    attribute0_register.Value(),  attribute1_register.Value(),  attribute2_register.Value(),  attribute3_register.Value(),
+                    attribute4_register.Value(),  attribute5_register.Value(),  attribute6_register.Value(),  attribute7_register.Value(),
+                    attribute8_register.Value(),  attribute9_register.Value(),  attribute10_register.Value(), attribute11_register.Value(),
+                    attribute12_register.Value(), attribute13_register.Value(), attribute14_register.Value(), attribute15_register.Value(),
                 };
                 return (int)fields[attribute_index];
             }
@@ -895,7 +895,7 @@ struct Regs {
             };
 
             bool IsFloat32() const {
-                return format == FLOAT32;
+                return format.Value() == FLOAT32;
             }
 
             union {

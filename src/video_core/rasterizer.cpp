@@ -30,14 +30,14 @@ static void DrawPixel(int x, int y, const Math::Vec4<u8>& color) {
 
     // Similarly to textures, the render framebuffer is laid out from bottom to top, too.
     // NOTE: The framebuffer height register contains the actual FB height minus one.
-    y = framebuffer.height - y;
+    y = framebuffer.height.Value() - y;
 
     const u32 coarse_y = y & ~7;
     u32 bytes_per_pixel = GPU::Regs::BytesPerPixel(GPU::Regs::PixelFormat(framebuffer.color_format.Value()));
-    u32 dst_offset = VideoCore::GetMortonOffset(x, y, bytes_per_pixel) + coarse_y * framebuffer.width * bytes_per_pixel;
+    u32 dst_offset = VideoCore::GetMortonOffset(x, y, bytes_per_pixel) + coarse_y * framebuffer.width.Value() * bytes_per_pixel;
     u8* dst_pixel = Memory::GetPhysicalPointer(addr) + dst_offset;
 
-    switch (framebuffer.color_format) {
+    switch (framebuffer.color_format.Value()) {
     case Regs::ColorFormat::RGBA8:
         Color::EncodeRGBA8(color, dst_pixel);
         break;
@@ -68,14 +68,14 @@ static const Math::Vec4<u8> GetPixel(int x, int y) {
     const auto& framebuffer = g_state.regs.framebuffer;
     const PAddr addr = framebuffer.GetColorBufferPhysicalAddress();
 
-    y = framebuffer.height - y;
+    y = framebuffer.height.Value() - y;
 
     const u32 coarse_y = y & ~7;
     u32 bytes_per_pixel = GPU::Regs::BytesPerPixel(GPU::Regs::PixelFormat(framebuffer.color_format.Value()));
-    u32 src_offset = VideoCore::GetMortonOffset(x, y, bytes_per_pixel) + coarse_y * framebuffer.width * bytes_per_pixel;
+    u32 src_offset = VideoCore::GetMortonOffset(x, y, bytes_per_pixel) + coarse_y * framebuffer.width.Value() * bytes_per_pixel;
     u8* src_pixel = Memory::GetPhysicalPointer(addr) + src_offset;
 
-    switch (framebuffer.color_format) {
+    switch (framebuffer.color_format.Value()) {
     case Regs::ColorFormat::RGBA8:
         return Color::DecodeRGBA8(src_pixel);
 
@@ -104,11 +104,11 @@ static u32 GetDepth(int x, int y) {
     const PAddr addr = framebuffer.GetDepthBufferPhysicalAddress();
     u8* depth_buffer = Memory::GetPhysicalPointer(addr);
 
-    y = framebuffer.height - y;
+    y = framebuffer.height.Value() - y;
 
     const u32 coarse_y = y & ~7;
     u32 bytes_per_pixel = Regs::BytesPerDepthPixel(framebuffer.depth_format);
-    u32 stride = framebuffer.width * bytes_per_pixel;
+    u32 stride = framebuffer.width.Value() * bytes_per_pixel;
 
     u32 src_offset = VideoCore::GetMortonOffset(x, y, bytes_per_pixel) + coarse_y * stride;
     u8* src_pixel = depth_buffer + src_offset;
@@ -132,11 +132,11 @@ static u8 GetStencil(int x, int y) {
     const PAddr addr = framebuffer.GetDepthBufferPhysicalAddress();
     u8* depth_buffer = Memory::GetPhysicalPointer(addr);
 
-    y = framebuffer.height - y;
+    y = framebuffer.height.Value() - y;
 
     const u32 coarse_y = y & ~7;
     u32 bytes_per_pixel = Pica::Regs::BytesPerDepthPixel(framebuffer.depth_format);
-    u32 stride = framebuffer.width * bytes_per_pixel;
+    u32 stride = framebuffer.width.Value() * bytes_per_pixel;
 
     u32 src_offset = VideoCore::GetMortonOffset(x, y, bytes_per_pixel) + coarse_y * stride;
     u8* src_pixel = depth_buffer + src_offset;
@@ -156,11 +156,11 @@ static void SetDepth(int x, int y, u32 value) {
     const PAddr addr = framebuffer.GetDepthBufferPhysicalAddress();
     u8* depth_buffer = Memory::GetPhysicalPointer(addr);
 
-    y = framebuffer.height - y;
+    y = framebuffer.height.Value() - y;
 
     const u32 coarse_y = y & ~7;
     u32 bytes_per_pixel = Regs::BytesPerDepthPixel(framebuffer.depth_format);
-    u32 stride = framebuffer.width * bytes_per_pixel;
+    u32 stride = framebuffer.width.Value() * bytes_per_pixel;
 
     u32 dst_offset = VideoCore::GetMortonOffset(x, y, bytes_per_pixel) + coarse_y * stride;
     u8* dst_pixel = depth_buffer + dst_offset;
@@ -190,11 +190,11 @@ static void SetStencil(int x, int y, u8 value) {
     const PAddr addr = framebuffer.GetDepthBufferPhysicalAddress();
     u8* depth_buffer = Memory::GetPhysicalPointer(addr);
 
-    y = framebuffer.height - y;
+    y = framebuffer.height.Value() - y;
 
     const u32 coarse_y = y & ~7;
     u32 bytes_per_pixel = Pica::Regs::BytesPerDepthPixel(framebuffer.depth_format);
-    u32 stride = framebuffer.width * bytes_per_pixel;
+    u32 stride = framebuffer.width.Value() * bytes_per_pixel;
 
     u32 dst_offset = VideoCore::GetMortonOffset(x, y, bytes_per_pixel) + coarse_y * stride;
     u8* dst_pixel = depth_buffer + dst_offset;
@@ -316,14 +316,14 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
                                    ScreenToRasterizerCoordinates(v1.screenpos),
                                    ScreenToRasterizerCoordinates(v2.screenpos) };
 
-    if (regs.cull_mode == Regs::CullMode::KeepAll) {
+    if (regs.cull_mode.Value() == Regs::CullMode::KeepAll) {
         // Make sure we always end up with a triangle wound counter-clockwise
         if (!reversed && SignedArea(vtxpos[0].xy(), vtxpos[1].xy(), vtxpos[2].xy()) <= 0) {
             ProcessTriangleInternal(v0, v2, v1, true);
             return;
         }
     } else {
-        if (!reversed && regs.cull_mode == Regs::CullMode::KeepClockWise) {
+        if (!reversed && regs.cull_mode.Value() == Regs::CullMode::KeepClockWise) {
             // Reverse vertex order and use the CCW code path.
             ProcessTriangleInternal(v0, v2, v1, true);
             return;
@@ -371,7 +371,7 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
     auto textures = regs.GetTextures();
     auto tev_stages = regs.GetTevStages();
 
-    bool stencil_action_enable = g_state.regs.output_merger.stencil_test.enable && g_state.regs.framebuffer.depth_format == Regs::DepthFormat::D24S8;
+    bool stencil_action_enable = g_state.regs.output_merger.stencil_test.enable.ToBool() && g_state.regs.framebuffer.depth_format == Regs::DepthFormat::D24S8;
     const auto stencil_test = g_state.regs.output_merger.stencil_test;
 
     // Enter rasterization loop, starting at the center of the topleft bounding box corner.
@@ -438,8 +438,8 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
 
                 DEBUG_ASSERT(0 != texture.config.address);
 
-                int s = (int)(uv[i].u() * float24::FromFloat32(static_cast<float>(texture.config.width))).ToFloat32();
-                int t = (int)(uv[i].v() * float24::FromFloat32(static_cast<float>(texture.config.height))).ToFloat32();
+                int s = (int)(uv[i].u() * float24::FromFloat32(static_cast<float>(texture.config.width.Value()))).ToFloat32();
+                int t = (int)(uv[i].v() * float24::FromFloat32(static_cast<float>(texture.config.height.Value()))).ToFloat32();
                 static auto GetWrappedTexCoord = [](Regs::TextureConfig::WrapMode mode, int val, unsigned size) {
                     switch (mode) {
                         case Regs::TextureConfig::ClampToEdge:
@@ -468,16 +468,16 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
                     }
                 };
 
-                if ((texture.config.wrap_s == Regs::TextureConfig::ClampToBorder && (s < 0 || s >= texture.config.width))
-                    || (texture.config.wrap_t == Regs::TextureConfig::ClampToBorder && (t < 0 || t >= texture.config.height))) {
+                if ((texture.config.wrap_s.Value() == Regs::TextureConfig::ClampToBorder && (s < 0 || s >= texture.config.width.Value()))
+                    || (texture.config.wrap_t.Value() == Regs::TextureConfig::ClampToBorder && (t < 0 || t >= texture.config.height.Value()))) {
                     auto border_color = texture.config.border_color;
-                    texture_color[i] = { border_color.r, border_color.g, border_color.b, border_color.a };
+                    texture_color[i] = { (u8)border_color.r.Value(), (u8)border_color.g.Value(), (u8)border_color.b.Value(), (u8)border_color.a.Value() };
                 } else {
                     // Textures are laid out from bottom to top, hence we invert the t coordinate.
                     // NOTE: This may not be the right place for the inversion.
                     // TODO: Check if this applies to ETC textures, too.
-                    s = GetWrappedTexCoord(texture.config.wrap_s, s, texture.config.width);
-                    t = texture.config.height - 1 - GetWrappedTexCoord(texture.config.wrap_t, t, texture.config.height);
+                    s = GetWrappedTexCoord(texture.config.wrap_s.Value(), s, texture.config.width.Value());
+                    t = texture.config.height.Value() - 1 - GetWrappedTexCoord(texture.config.wrap_t.Value(), t, texture.config.height.Value());
 
                     u8* texture_data = Memory::GetPhysicalPointer(texture.config.GetPhysicalAddress());
                     auto info = DebugUtils::TextureInfo::FromPicaRegister(texture.config, texture.format);
@@ -500,8 +500,8 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
             Math::Vec4<u8> combiner_output;
             Math::Vec4<u8> combiner_buffer = {0, 0, 0, 0};
             Math::Vec4<u8> next_combiner_buffer = {
-                regs.tev_combiner_buffer_color.r, regs.tev_combiner_buffer_color.g,
-                regs.tev_combiner_buffer_color.b, regs.tev_combiner_buffer_color.a
+                (u8)regs.tev_combiner_buffer_color.r.Value(), (u8)regs.tev_combiner_buffer_color.g.Value(),
+                (u8)regs.tev_combiner_buffer_color.b.Value(), (u8)regs.tev_combiner_buffer_color.a.Value()
             };
 
             for (unsigned tev_stage_index = 0; tev_stage_index < tev_stages.size(); ++tev_stage_index) {
@@ -536,7 +536,7 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
                         return combiner_buffer;
 
                     case Source::Constant:
-                        return {tev_stage.const_r, tev_stage.const_g, tev_stage.const_b, tev_stage.const_a};
+                        return {(u8)tev_stage.const_r.Value(), (u8)tev_stage.const_g.Value(), (u8)tev_stage.const_b.Value(), (u8)tev_stage.const_a.Value()};
 
                     case Source::Previous:
                         return combiner_output;
@@ -729,19 +729,19 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
                 //       combiner_output.rgb(), but instead store it in a temporary variable until
                 //       alpha combining has been done.
                 Math::Vec3<u8> color_result[3] = {
-                    GetColorModifier(tev_stage.color_modifier1, GetSource(tev_stage.color_source1)),
-                    GetColorModifier(tev_stage.color_modifier2, GetSource(tev_stage.color_source2)),
-                    GetColorModifier(tev_stage.color_modifier3, GetSource(tev_stage.color_source3))
+                    GetColorModifier(tev_stage.color_modifier1.Value(), GetSource(tev_stage.color_source1.Value())),
+                    GetColorModifier(tev_stage.color_modifier2.Value(), GetSource(tev_stage.color_source2.Value())),
+                    GetColorModifier(tev_stage.color_modifier3.Value(), GetSource(tev_stage.color_source3.Value()))
                 };
-                auto color_output = ColorCombine(tev_stage.color_op, color_result);
+                auto color_output = ColorCombine(tev_stage.color_op.Value(), color_result);
 
                 // alpha combiner
                 std::array<u8,3> alpha_result = {{
-                    GetAlphaModifier(tev_stage.alpha_modifier1, GetSource(tev_stage.alpha_source1)),
-                    GetAlphaModifier(tev_stage.alpha_modifier2, GetSource(tev_stage.alpha_source2)),
-                    GetAlphaModifier(tev_stage.alpha_modifier3, GetSource(tev_stage.alpha_source3))
+                    GetAlphaModifier(tev_stage.alpha_modifier1.Value(), GetSource(tev_stage.alpha_source1.Value())),
+                    GetAlphaModifier(tev_stage.alpha_modifier2.Value(), GetSource(tev_stage.alpha_source2.Value())),
+                    GetAlphaModifier(tev_stage.alpha_modifier3.Value(), GetSource(tev_stage.alpha_source3.Value()))
                 }};
-                auto alpha_output = AlphaCombine(tev_stage.alpha_op, alpha_result);
+                auto alpha_output = AlphaCombine(tev_stage.alpha_op.Value(), alpha_result);
 
                 combiner_output[0] = std::min((unsigned)255, color_output.r() * tev_stage.GetColorMultiplier());
                 combiner_output[1] = std::min((unsigned)255, color_output.g() * tev_stage.GetColorMultiplier());
@@ -763,10 +763,10 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
 
             const auto& output_merger = regs.output_merger;
             // TODO: Does alpha testing happen before or after stencil?
-            if (output_merger.alpha_test.enable) {
+            if (output_merger.alpha_test.enable.ToBool()) {
                 bool pass = false;
 
-                switch (output_merger.alpha_test.func) {
+                switch (output_merger.alpha_test.func.Value()) {
                 case Regs::CompareFunc::Never:
                     pass = false;
                     break;
@@ -776,27 +776,27 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
                     break;
 
                 case Regs::CompareFunc::Equal:
-                    pass = combiner_output.a() == output_merger.alpha_test.ref;
+                    pass = combiner_output.a() == output_merger.alpha_test.ref.Value();
                     break;
 
                 case Regs::CompareFunc::NotEqual:
-                    pass = combiner_output.a() != output_merger.alpha_test.ref;
+                    pass = combiner_output.a() != output_merger.alpha_test.ref.Value();
                     break;
 
                 case Regs::CompareFunc::LessThan:
-                    pass = combiner_output.a() < output_merger.alpha_test.ref;
+                    pass = combiner_output.a() < output_merger.alpha_test.ref.Value();
                     break;
 
                 case Regs::CompareFunc::LessThanOrEqual:
-                    pass = combiner_output.a() <= output_merger.alpha_test.ref;
+                    pass = combiner_output.a() <= output_merger.alpha_test.ref.Value();
                     break;
 
                 case Regs::CompareFunc::GreaterThan:
-                    pass = combiner_output.a() > output_merger.alpha_test.ref;
+                    pass = combiner_output.a() > output_merger.alpha_test.ref.Value();
                     break;
 
                 case Regs::CompareFunc::GreaterThanOrEqual:
-                    pass = combiner_output.a() >= output_merger.alpha_test.ref;
+                    pass = combiner_output.a() >= output_merger.alpha_test.ref.Value();
                     break;
                 }
 
@@ -807,17 +807,17 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
             u8 old_stencil = 0;
 
             auto UpdateStencil = [stencil_test, x, y, &old_stencil](Pica::Regs::StencilAction action) {
-                u8 new_stencil = PerformStencilAction(action, old_stencil, stencil_test.reference_value);
-                SetStencil(x >> 4, y >> 4, (new_stencil & stencil_test.write_mask) | (old_stencil & ~stencil_test.write_mask));
+                u8 new_stencil = PerformStencilAction(action, old_stencil, stencil_test.reference_value.Value());
+                SetStencil(x >> 4, y >> 4, (new_stencil & stencil_test.write_mask.Value()) | (old_stencil & ~stencil_test.write_mask.Value()));
             };
 
             if (stencil_action_enable) {
                 old_stencil = GetStencil(x >> 4, y >> 4);
-                u8 dest = old_stencil & stencil_test.input_mask;
-                u8 ref = stencil_test.reference_value & stencil_test.input_mask;
+                u8 dest = old_stencil & stencil_test.input_mask.Value();
+                u8 ref = stencil_test.reference_value.Value() & stencil_test.input_mask.Value();
 
                 bool pass = false;
-                switch (stencil_test.func) {
+                switch (stencil_test.func.Value()) {
                 case Regs::CompareFunc::Never:
                     pass = false;
                     break;
@@ -852,13 +852,13 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
                 }
 
                 if (!pass) {
-                    UpdateStencil(stencil_test.action_stencil_fail);
+                    UpdateStencil(stencil_test.action_stencil_fail.Value());
                     continue;
                 }
             }
 
             // TODO: Does depth indeed only get written even if depth testing is enabled?
-            if (output_merger.depth_test_enable) {
+            if (output_merger.depth_test_enable.ToBool()) {
                 unsigned num_bits = Regs::DepthBitsPerPixel(regs.framebuffer.depth_format);
                 u32 z = (u32)((v0.screenpos[2].ToFloat32() * w0 +
                                v1.screenpos[2].ToFloat32() * w1 +
@@ -867,7 +867,7 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
 
                 bool pass = false;
 
-                switch (output_merger.depth_test_func) {
+                switch (output_merger.depth_test_func.Value()) {
                 case Regs::CompareFunc::Never:
                     pass = false;
                     break;
@@ -903,22 +903,22 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
 
                 if (!pass) {
                     if (stencil_action_enable)
-                        UpdateStencil(stencil_test.action_depth_fail);
+                        UpdateStencil(stencil_test.action_depth_fail.Value());
                     continue;
                 }
 
-                if (output_merger.depth_write_enable)
+                if (output_merger.depth_write_enable.ToBool())
                     SetDepth(x >> 4, y >> 4, z);
             }
 
             // The stencil depth_pass action is executed even if depth testing is disabled
             if (stencil_action_enable)
-                UpdateStencil(stencil_test.action_depth_pass);
+                UpdateStencil(stencil_test.action_depth_pass.Value());
 
             auto dest = GetPixel(x >> 4, y >> 4);
             Math::Vec4<u8> blend_output = combiner_output;
 
-            if (output_merger.alphablend_enable) {
+            if (output_merger.alphablend_enable.ToBool()) {
                 auto params = output_merger.alpha_blending;
 
                 auto LookupFactorRGB = [&](Regs::BlendFactor factor) -> Math::Vec3<u8> {
@@ -954,16 +954,16 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
                         return Math::Vec3<u8>(255 - dest.a(), 255 - dest.a(), 255 - dest.a());
 
                     case Regs::BlendFactor::ConstantColor:
-                        return Math::Vec3<u8>(output_merger.blend_const.r, output_merger.blend_const.g, output_merger.blend_const.b);
+                        return Math::Vec3<u8>(output_merger.blend_const.r.Value(), output_merger.blend_const.g.Value(), output_merger.blend_const.b.Value());
 
                     case Regs::BlendFactor::OneMinusConstantColor:
-                        return Math::Vec3<u8>(255 - output_merger.blend_const.r, 255 - output_merger.blend_const.g, 255 - output_merger.blend_const.b);
+                        return Math::Vec3<u8>(255 - output_merger.blend_const.r.Value(), 255 - output_merger.blend_const.g.Value(), 255 - output_merger.blend_const.b.Value());
 
                     case Regs::BlendFactor::ConstantAlpha:
-                        return Math::Vec3<u8>(output_merger.blend_const.a, output_merger.blend_const.a, output_merger.blend_const.a);
+                        return Math::Vec3<u8>(output_merger.blend_const.a.Value(), output_merger.blend_const.a.Value(), output_merger.blend_const.a.Value());
 
                     case Regs::BlendFactor::OneMinusConstantAlpha:
-                        return Math::Vec3<u8>(255 - output_merger.blend_const.a, 255 - output_merger.blend_const.a, 255 - output_merger.blend_const.a);
+                        return Math::Vec3<u8>(255 - output_merger.blend_const.a.Value(), 255 - output_merger.blend_const.a.Value(), 255 - output_merger.blend_const.a.Value());
 
                     default:
                         LOG_CRITICAL(HW_GPU, "Unknown color blend factor %x", factor);
@@ -995,10 +995,10 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
                         return 255 - dest.a();
 
                     case Regs::BlendFactor::ConstantAlpha:
-                        return output_merger.blend_const.a;
+                        return output_merger.blend_const.a.Value();
 
                     case Regs::BlendFactor::OneMinusConstantAlpha:
-                        return 255 - output_merger.blend_const.a;
+                        return 255 - output_merger.blend_const.a.Value();
 
                     default:
                         LOG_CRITICAL(HW_GPU, "Unknown alpha blend factor %x", factor);
@@ -1058,13 +1058,13 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
                                     MathUtil::Clamp(result.a(), 0, 255));
                 };
 
-                auto srcfactor = Math::MakeVec(LookupFactorRGB(params.factor_source_rgb),
-                                               LookupFactorA(params.factor_source_a));
-                auto dstfactor = Math::MakeVec(LookupFactorRGB(params.factor_dest_rgb),
-                                               LookupFactorA(params.factor_dest_a));
+                auto srcfactor = Math::MakeVec(LookupFactorRGB(params.factor_source_rgb.Value()),
+                                               LookupFactorA(params.factor_source_a.Value()));
+                auto dstfactor = Math::MakeVec(LookupFactorRGB(params.factor_dest_rgb.Value()),
+                                               LookupFactorA(params.factor_dest_a.Value()));
 
-                blend_output     = EvaluateBlendEquation(combiner_output, srcfactor, dest, dstfactor, params.blend_equation_rgb);
-                blend_output.a() = EvaluateBlendEquation(combiner_output, srcfactor, dest, dstfactor, params.blend_equation_a).a();
+                blend_output     = EvaluateBlendEquation(combiner_output, srcfactor, dest, dstfactor, params.blend_equation_rgb.Value());
+                blend_output.a() = EvaluateBlendEquation(combiner_output, srcfactor, dest, dstfactor, params.blend_equation_a.Value()).a();
             } else {
                 static auto LogicOp = [](u8 src, u8 dest, Regs::LogicOp op) -> u8 {
                     switch (op) {
@@ -1119,17 +1119,17 @@ static void ProcessTriangleInternal(const Shader::OutputVertex& v0,
                 };
 
                 blend_output = Math::MakeVec(
-                    LogicOp(combiner_output.r(), dest.r(), output_merger.logic_op),
-                    LogicOp(combiner_output.g(), dest.g(), output_merger.logic_op),
-                    LogicOp(combiner_output.b(), dest.b(), output_merger.logic_op),
-                    LogicOp(combiner_output.a(), dest.a(), output_merger.logic_op));
+                    LogicOp(combiner_output.r(), dest.r(), output_merger.logic_op.Value()),
+                    LogicOp(combiner_output.g(), dest.g(), output_merger.logic_op.Value()),
+                    LogicOp(combiner_output.b(), dest.b(), output_merger.logic_op.Value()),
+                    LogicOp(combiner_output.a(), dest.a(), output_merger.logic_op.Value()));
             }
 
             const Math::Vec4<u8> result = {
-                output_merger.red_enable   ? blend_output.r() : dest.r(),
-                output_merger.green_enable ? blend_output.g() : dest.g(),
-                output_merger.blue_enable  ? blend_output.b() : dest.b(),
-                output_merger.alpha_enable ? blend_output.a() : dest.a()
+                output_merger.red_enable.ToBool()   ? blend_output.r() : dest.r(),
+                output_merger.green_enable.ToBool() ? blend_output.g() : dest.g(),
+                output_merger.blue_enable.ToBool()  ? blend_output.b() : dest.b(),
+                output_merger.alpha_enable.ToBool() ? blend_output.a() : dest.a()
             };
 
             DrawPixel(x >> 4, y >> 4, result);

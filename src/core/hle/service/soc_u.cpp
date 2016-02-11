@@ -178,34 +178,34 @@ struct CTRPollFD {
         static Events TranslateTo3DS(u32 input_event) {
             Events ev = {};
             if (input_event & POLLIN)
-                ev.pollin = 1;
+                ev.pollin.Assign(1);
             if (input_event & POLLPRI)
-                ev.pollpri = 1;
+                ev.pollpri.Assign(1);
             if (input_event & POLLHUP)
-                ev.pollhup = 1;
+                ev.pollhup.Assign(1);
             if (input_event & POLLERR)
-                ev.pollerr = 1;
+                ev.pollerr.Assign(1);
             if (input_event & POLLOUT)
-                ev.pollout = 1;
+                ev.pollout.Assign(1);
             if (input_event & POLLNVAL)
-                ev.pollnval = 1;
+                ev.pollnval.Assign(1);
             return ev;
         }
 
         /// Translates the resulting events of a Poll operation from 3ds specific to platform specific
         static u32 TranslateToPlatform(Events input_event) {
             u32 ret = 0;
-            if (input_event.pollin)
+            if (input_event.pollin.ToBool())
                 ret |= POLLIN;
-            if (input_event.pollpri)
+            if (input_event.pollpri.ToBool())
                 ret |= POLLPRI;
-            if (input_event.pollhup)
+            if (input_event.pollhup.ToBool())
                 ret |= POLLHUP;
-            if (input_event.pollerr)
+            if (input_event.pollerr.ToBool())
                 ret |= POLLERR;
-            if (input_event.pollout)
+            if (input_event.pollout.ToBool())
                 ret |= POLLOUT;
-            if (input_event.pollnval)
+            if (input_event.pollnval.ToBool())
                 ret |= POLLNVAL;
             return ret;
         }

@@ -751,7 +751,7 @@ void JitCompiler::Compile_NextInstr(unsigned* offset) {
 
 CompiledShader* JitCompiler::Compile() {
     const u8* start = GetCodePtr();
-    unsigned offset = g_state.regs.vs.main_offset;
+    unsigned offset = g_state.regs.vs.main_offset.Value();
 
     // The stack pointer is 8 modulo 16 at the entry of a procedure
     ABI_PushRegistersAndAdjustStack(ABI_ALL_CALLEE_SAVED, 8);

@@ -26,14 +26,14 @@
 #include "video_core/renderer_opengl/pica_to_gl.h"
 
 static bool IsPassThroughTevStage(const Pica::Regs::TevStageConfig& stage) {
-    return (stage.color_op == Pica::Regs::TevStageConfig::Operation::Replace &&
-            stage.alpha_op == Pica::Regs::TevStageConfig::Operation::Replace &&
-            stage.color_source1 == Pica::Regs::TevStageConfig::Source::Previous &&
-            stage.alpha_source1 == Pica::Regs::TevStageConfig::Source::Previous &&
-            stage.color_modifier1 == Pica::Regs::TevStageConfig::ColorModifier::SourceColor &&
-            stage.alpha_modifier1 == Pica::Regs::TevStageConfig::AlphaModifier::SourceAlpha &&
-            stage.GetColorMultiplier() == 1 &&
-            stage.GetAlphaMultiplier() == 1);
+    return (stage.color_op.Value()        == Pica::Regs::TevStageConfig::Operation::Replace &&
+            stage.alpha_op.Value()        == Pica::Regs::TevStageConfig::Operation::Replace &&
+            stage.color_source1.Value()   == Pica::Regs::TevStageConfig::Source::Previous &&
+            stage.alpha_source1.Value()   == Pica::Regs::TevStageConfig::Source::Previous &&
+            stage.color_modifier1.Value() == Pica::Regs::TevStageConfig::ColorModifier::SourceColor &&
+            stage.alpha_modifier1.Value() == Pica::Regs::TevStageConfig::AlphaModifier::SourceAlpha &&
+            stage.GetColorMultiplier()    == 1 &&
+            stage.GetAlphaMultiplier()    == 1);
 }
 
 RasterizerOpenGL::RasterizerOpenGL() : last_fb_color_addr(0), last_fb_depth_addr(0) { }
@@ -170,7 +170,7 @@ void RasterizerOpenGL::DrawTriangles() {
     const auto& regs = Pica::g_state.regs;
 
     PAddr cur_fb_color_addr = regs.framebuffer.GetColorBufferPhysicalAddress();
-    u32 cur_fb_color_size = Pica::Regs::BytesPerColorPixel(regs.framebuffer.color_format)
+    u32 cur_fb_color_size = Pica::Regs::BytesPerColorPixel(regs.framebuffer.color_format.Value())
                             * regs.framebuffer.GetWidth() * regs.framebuffer.GetHeight();
 
     PAddr cur_fb_depth_addr = regs.framebuffer.GetDepthBufferPhysicalAddress();
@@ -292,7 +292,7 @@ void RasterizerOpenGL::FlushRegion(PAddr addr, u32 size) {
     const auto& regs = Pica::g_state.regs;
 
     PAddr cur_fb_color_addr = regs.framebuffer.GetColorBufferPhysicalAddress();
-    u32 cur_fb_color_size = Pica::Regs::BytesPerColorPixel(regs.framebuffer.color_format)
+    u32 cur_fb_color_size = Pica::Regs::BytesPerColorPixel(regs.framebuffer.color_format.Value())
                             * regs.framebuffer.GetWidth() * regs.framebuffer.GetHeight();
 
     PAddr cur_fb_depth_addr = regs.framebuffer.GetDepthBufferPhysicalAddress();
@@ -311,7 +311,7 @@ void RasterizerOpenGL::InvalidateRegion(PAddr addr, u32 size) {
     const auto& regs = Pica::g_state.regs;
 
     PAddr cur_fb_color_addr = regs.framebuffer.GetColorBufferPhysicalAddress();
-    u32 cur_fb_color_size = Pica::Regs::BytesPerColorPixel(regs.framebuffer.color_format)
+    u32 cur_fb_color_size = Pica::Regs::BytesPerColorPixel(regs.framebuffer.color_format.Value())
                             * regs.framebuffer.GetWidth() * regs.framebuffer.GetHeight();
 
     PAddr cur_fb_depth_addr = regs.framebuffer.GetDepthBufferPhysicalAddress();
@@ -342,21 +342,21 @@ void RasterizerOpenGL::SamplerInfo::Create() {
 void RasterizerOpenGL::SamplerInfo::SyncWithConfig(const Pica::Regs::TextureConfig& config) {
     GLuint s = sampler.handle;
 
-    if (mag_filter != config.mag_filter) {
-        mag_filter = config.mag_filter;
+    if (mag_filter != config.mag_filter.Value()) {
+        mag_filter = config.mag_filter.Value();
         glSamplerParameteri(s, GL_TEXTURE_MAG_FILTER, PicaToGL::TextureFilterMode(mag_filter));
     }
-    if (min_filter != config.min_filter) {
-        min_filter = config.min_filter;
+    if (min_filter != config.min_filter.Value()) {
+        min_filter = config.min_filter.Value();
         glSamplerParameteri(s, GL_TEXTURE_MIN_FILTER, PicaToGL::TextureFilterMode(min_filter));
     }
 
-    if (wrap_s != config.wrap_s) {
-        wrap_s = config.wrap_s;
+    if (wrap_s != config.wrap_s.Value()) {
+        wrap_s = config.wrap_s.Value();
         glSamplerParameteri(s, GL_TEXTURE_WRAP_S, PicaToGL::WrapMode(wrap_s));
     }
-    if (wrap_t != config.wrap_t) {
-        wrap_t = config.wrap_t;
+    if (wrap_t != config.wrap_t.Value()) {
+        wrap_t = config.wrap_t.Value();
         glSamplerParameteri(s, GL_TEXTURE_WRAP_T, PicaToGL::WrapMode(wrap_t));
     }
 
@@ -515,7 +515,7 @@ void RasterizerOpenGL::SyncFramebuffer() {
     const auto& regs = Pica::g_state.regs;
 
     PAddr cur_fb_color_addr = regs.framebuffer.GetColorBufferPhysicalAddress();
-    Pica::Regs::ColorFormat new_fb_color_format = regs.framebuffer.color_format;
+    Pica::Regs::ColorFormat new_fb_color_format = regs.framebuffer.color_format.Value();
 
     PAddr cur_fb_depth_addr = regs.framebuffer.GetDepthBufferPhysicalAddress();
     Pica::Regs::DepthFormat new_fb_depth_format = regs.framebuffer.depth_format;
@@ -587,7 +587,7 @@ void RasterizerOpenGL::SyncFramebuffer() {
 void RasterizerOpenGL::SyncCullMode() {
     const auto& regs = Pica::g_state.regs;
 
-    switch (regs.cull_mode) {
+    switch (regs.cull_mode.Value()) {
     case Pica::Regs::CullMode::KeepAll:
         state.cull.enabled = false;
         break;
@@ -610,8 +610,8 @@ void RasterizerOpenGL::SyncCullMode() {
 }
 
 void RasterizerOpenGL::SyncDepthModifiers() {
-    float depth_scale = -Pica::float24::FromRawFloat24(Pica::g_state.regs.viewport_depth_range).ToFloat32();
-    float depth_offset = Pica::float24::FromRawFloat24(Pica::g_state.regs.viewport_depth_far_plane).ToFloat32() / 2.0f;
+    float depth_scale = -Pica::float24::FromRawFloat24(Pica::g_state.regs.viewport_depth_range.Value()).ToFloat32();
+    float depth_offset = Pica::float24::FromRawFloat24(Pica::g_state.regs.viewport_depth_far_plane.Value()).ToFloat32() / 2.0f;
 
     // TODO: Implement scale modifier
     uniform_block_data.data.depth_offset = depth_offset;
@@ -619,15 +619,15 @@ void RasterizerOpenGL::SyncDepthModifiers() {
 }
 
 void RasterizerOpenGL::SyncBlendEnabled() {
-    state.blend.enabled = (Pica::g_state.regs.output_merger.alphablend_enable == 1);
+    state.blend.enabled = (Pica::g_state.regs.output_merger.alphablend_enable.Value() == 1);
 }
 
 void RasterizerOpenGL::SyncBlendFuncs() {
     const auto& regs = Pica::g_state.regs;
-    state.blend.src_rgb_func = PicaToGL::BlendFunc(regs.output_merger.alpha_blending.factor_source_rgb);
-    state.blend.dst_rgb_func = PicaToGL::BlendFunc(regs.output_merger.alpha_blending.factor_dest_rgb);
-    state.blend.src_a_func = PicaToGL::BlendFunc(regs.output_merger.alpha_blending.factor_source_a);
-    state.blend.dst_a_func = PicaToGL::BlendFunc(regs.output_merger.alpha_blending.factor_dest_a);
+    state.blend.src_rgb_func = PicaToGL::BlendFunc(regs.output_merger.alpha_blending.factor_source_rgb.Value());
+    state.blend.dst_rgb_func = PicaToGL::BlendFunc(regs.output_merger.alpha_blending.factor_dest_rgb.Value());
+    state.blend.src_a_func = PicaToGL::BlendFunc(regs.output_merger.alpha_blending.factor_source_a.Value());
+    state.blend.dst_a_func = PicaToGL::BlendFunc(regs.output_merger.alpha_blending.factor_dest_a.Value());
 }
 
 void RasterizerOpenGL::SyncBlendColor() {
@@ -640,37 +640,37 @@ void RasterizerOpenGL::SyncBlendColor() {
 
 void RasterizerOpenGL::SyncAlphaTest() {
     const auto& regs = Pica::g_state.regs;
-    if (regs.output_merger.alpha_test.ref != uniform_block_data.data.alphatest_ref) {
-        uniform_block_data.data.alphatest_ref = regs.output_merger.alpha_test.ref;
+    if (regs.output_merger.alpha_test.ref.Value() != uniform_block_data.data.alphatest_ref) {
+        uniform_block_data.data.alphatest_ref = regs.output_merger.alpha_test.ref.Value();
         uniform_block_data.dirty = true;
     }
 }
 
 void RasterizerOpenGL::SyncLogicOp() {
-    state.logic_op = PicaToGL::LogicOp(Pica::g_state.regs.output_merger.logic_op);
+    state.logic_op = PicaToGL::LogicOp(Pica::g_state.regs.output_merger.logic_op.Value());
 }
 
 void RasterizerOpenGL::SyncStencilTest() {
     const auto& regs = Pica::g_state.regs;
-    state.stencil.test_enabled = regs.output_merger.stencil_test.enable && regs.framebuffer.depth_format == Pica::Regs::DepthFormat::D24S8;
-    state.stencil.test_func = PicaToGL::CompareFunc(regs.output_merger.stencil_test.func);
-    state.stencil.test_ref = regs.output_merger.stencil_test.reference_value;
-    state.stencil.test_mask = regs.output_merger.stencil_test.input_mask;
-    state.stencil.write_mask = regs.output_merger.stencil_test.write_mask;
-    state.stencil.action_stencil_fail = PicaToGL::StencilOp(regs.output_merger.stencil_test.action_stencil_fail);
-    state.stencil.action_depth_fail = PicaToGL::StencilOp(regs.output_merger.stencil_test.action_depth_fail);
-    state.stencil.action_depth_pass = PicaToGL::StencilOp(regs.output_merger.stencil_test.action_depth_pass);
+    state.stencil.test_enabled = regs.output_merger.stencil_test.enable.ToBool() && regs.framebuffer.depth_format == Pica::Regs::DepthFormat::D24S8;
+    state.stencil.test_func = PicaToGL::CompareFunc(regs.output_merger.stencil_test.func.Value());
+    state.stencil.test_ref = regs.output_merger.stencil_test.reference_value.Value();
+    state.stencil.test_mask = regs.output_merger.stencil_test.input_mask.Value();
+    state.stencil.write_mask = regs.output_merger.stencil_test.write_mask.Value();
+    state.stencil.action_stencil_fail = PicaToGL::StencilOp(regs.output_merger.stencil_test.action_stencil_fail.Value());
+    state.stencil.action_depth_fail = PicaToGL::StencilOp(regs.output_merger.stencil_test.action_depth_fail.Value());
+    state.stencil.action_depth_pass = PicaToGL::StencilOp(regs.output_merger.stencil_test.action_depth_pass.Value());
 }
 
 void RasterizerOpenGL::SyncDepthTest() {
     const auto& regs = Pica::g_state.regs;
-    state.depth.test_enabled = (regs.output_merger.depth_test_enable == 1);
-    state.depth.test_func = PicaToGL::CompareFunc(regs.output_merger.depth_test_func);
-    state.color_mask.red_enabled = regs.output_merger.red_enable;
-    state.color_mask.green_enabled = regs.output_merger.green_enable;
-    state.color_mask.blue_enabled = regs.output_merger.blue_enable;
-    state.color_mask.alpha_enabled = regs.output_merger.alpha_enable;
-    state.depth.write_mask = regs.output_merger.depth_write_enable ? GL_TRUE : GL_FALSE;
+    state.depth.test_enabled = (regs.output_merger.depth_test_enable.Value() == 1);
+    state.depth.test_func = PicaToGL::CompareFunc(regs.output_merger.depth_test_func.Value());
+    state.color_mask.red_enabled = regs.output_merger.red_enable.Value();
+    state.color_mask.green_enabled = regs.output_merger.green_enable.Value();
+    state.color_mask.blue_enabled = regs.output_merger.blue_enable.Value();
+    state.color_mask.alpha_enabled = regs.output_merger.alpha_enable.Value();
+    state.depth.write_mask = regs.output_merger.depth_write_enable.ToBool() ? GL_TRUE : GL_FALSE;
 }
 
 void RasterizerOpenGL::SyncCombinerColor() {
@@ -693,14 +693,14 @@ void RasterizerOpenGL::SyncDrawState() {
     const auto& regs = Pica::g_state.regs;
 
     // Sync the viewport
-    GLsizei viewport_width = (GLsizei)Pica::float24::FromRawFloat24(regs.viewport_size_x).ToFloat32() * 2;
-    GLsizei viewport_height = (GLsizei)Pica::float24::FromRawFloat24(regs.viewport_size_y).ToFloat32() * 2;
+    GLsizei viewport_width = (GLsizei)Pica::float24::FromRawFloat24(regs.viewport_size_x.Value()).ToFloat32() * 2;
+    GLsizei viewport_height = (GLsizei)Pica::float24::FromRawFloat24(regs.viewport_size_y.Value()).ToFloat32() * 2;
 
     // OpenGL uses different y coordinates, so negate corner offset and flip origin
     // TODO: Ensure viewport_corner.x should not be negated or origin flipped
     // TODO: Use floating-point viewports for accuracy if supported
-    glViewport((GLsizei)regs.viewport_corner.x,
-               (GLsizei)regs.viewport_corner.y,
+    glViewport((GLsizei)regs.viewport_corner.x.Value(),
+               (GLsizei)regs.viewport_corner.y.Value(),
                 viewport_width, viewport_height);
 
     // Sync bound texture(s), upload if not cached

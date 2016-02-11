@@ -35,7 +35,7 @@ SharedPtr<Process> Process::Create(SharedPtr<CodeSet> code_set) {
 
     process->codeset = std::move(code_set);
     process->flags.raw = 0;
-    process->flags.memory_region = MemoryRegion::APPLICATION;
+    process->flags.memory_region.Assign(MemoryRegion::APPLICATION);
     Memory::InitLegacyAddressSpace(process->vm_manager);
 
     return process;
@@ -104,7 +104,7 @@ void Process::ParseKernelCaps(const u32* kernel_caps, size_t len) {
 }
 
 void Process::Run(s32 main_thread_priority, u32 stack_size) {
-    memory_region = GetMemoryRegion(flags.memory_region);
+    memory_region = GetMemoryRegion(flags.memory_region.Value());
 
     auto MapSegment = [&](CodeSet::Segment& segment, VMAPermission permissions, MemoryState memory_state) {
         auto vma = vm_manager.MapMemoryBlock(segment.addr, codeset->memory,

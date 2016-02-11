@@ -90,17 +90,17 @@ DiskFile::DiskFile(const DiskArchive& archive, const Path& path, const Mode mode
 }
 
 bool DiskFile::Open() {
-    if (!mode.create_flag && !FileUtil::Exists(path)) {
+    if (!mode.create_flag.ToBool() && !FileUtil::Exists(path)) {
         LOG_ERROR(Service_FS, "Non-existing file %s can't be open without mode create.", path.c_str());
         return false;
     }
 
     std::string mode_string;
-    if (mode.create_flag)
+    if (mode.create_flag.ToBool())
         mode_string = "w+";
-    else if (mode.write_flag)
+    else if (mode.write_flag.ToBool())
         mode_string = "r+"; // Files opened with Write access can be read from
-    else if (mode.read_flag)
+    else if (mode.read_flag.ToBool())
         mode_string = "r";
 
     // Open the file in binary mode, to avoid problems with CR/LF on Windows systems

@@ -111,26 +111,26 @@ inline void Write(u32 addr, const T data) {
         const bool is_second_filler = (index != GPU_REG_INDEX(memory_fill_config[0].trigger));
         auto& config = g_regs.memory_fill_config[is_second_filler];
 
-        if (config.trigger) {
+        if (config.trigger.ToBool()) {
             if (config.address_start) { // Some games pass invalid values here
                 u8* start = Memory::GetPhysicalPointer(config.GetStartAddress());
                 u8* end = Memory::GetPhysicalPointer(config.GetEndAddress());
 
-                if (config.fill_24bit) {
+                if (config.fill_24bit.ToBool()) {
                     // fill with 24-bit values
                     for (u8* ptr = start; ptr < end; ptr += 3) {
-                        ptr[0] = config.value_24bit_r;
-                        ptr[1] = config.value_24bit_g;
-                        ptr[2] = config.value_24bit_b;
+                        ptr[0] = config.value_24bit_r.Value();
+                        ptr[1] = config.value_24bit_g.Value();
+                        ptr[2] = config.value_24bit_b.Value();
                     }
-                } else if (config.fill_32bit) {
+                } else if (config.fill_32bit.ToBool()) {
                     // fill with 32-bit values
                     for (u32* ptr = (u32*)start; ptr < (u32*)end; ++ptr)
                         *ptr = config.value_32bit;
                 } else {
                     // fill with 16-bit values
                     for (u16* ptr = (u16*)start; ptr < (u16*)end; ++ptr)
-                        *ptr = config.value_16bit;
+                        *ptr = config.value_16bit.Value();
                 }
 
                 LOG_TRACE(HW_GPU, "MemoryFill from 0x%08x to 0x%08x", config.GetStartAddress(), config.GetEndAddress());
@@ -146,8 +146,8 @@ inline void Write(u32 addr, const T data) {
 
             // Reset "trigger" flag and set the "finish" flag
             // NOTE: This was confirmed to happen on hardware even if "address_start" is zero.
-            config.trigger = 0;
-            config.finished = 1;
+            config.trigger.Assign(0);
+            config.finished.Assign(1);
         }
         break;
     }
@@ -165,11 +165,11 @@ inline void Write(u32 addr, const T data) {
             u8* src_pointer = Memory::GetPhysicalPointer(config.GetPhysicalInputAddress());
             u8* dst_pointer = Memory::GetPhysicalPointer(config.GetPhysicalOutputAddress());
 
-            if (config.is_texture_copy) {
-                u32 input_width = config.texture_copy.input_width * 16;
-                u32 input_gap = config.texture_copy.input_gap * 16;
-                u32 output_width = config.texture_copy.output_width * 16;
-                u32 output_gap = config.texture_copy.output_gap * 16;
+            if (config.is_texture_copy.ToBool()) {
+                u32 input_width = config.texture_copy.input_width.Value() * 16;
+                u32 input_gap = config.texture_copy.input_gap.Value() * 16;
+                u32 output_width = config.texture_copy.output_width.Value() * 16;
+                u32 output_gap = config.texture_copy.output_gap.Value() * 16;
 
                 size_t contiguous_input_size = config.texture_copy.size / input_width * (input_width + input_gap);
                 VideoCore::g_renderer->rasterizer->FlushRegion(config.GetPhysicalInputAddress(), contiguous_input_size);
@@ -211,26 +211,26 @@ inline void Write(u32 addr, const T data) {
                 break;
             }
 
-            if (config.scaling > config.ScaleXY) {
+            if (config.scaling.Value() > config.ScaleXY) {
                 LOG_CRITICAL(HW_GPU, "Unimplemented display transfer scaling mode %u", config.scaling.Value());
                 UNIMPLEMENTED();
                 break;
             }
 
-            if (config.input_linear && config.scaling != config.NoScale) {
+            if (config.input_linear.ToBool() && config.scaling.Value() != config.NoScale) {
                 LOG_CRITICAL(HW_GPU, "Scaling is only implemented on tiled input");
                 UNIMPLEMENTED();
                 break;
             }
 
-            bool horizontal_scale = config.scaling != config.NoScale;
-            bool vertical_scale = config.scaling == config.ScaleXY;
+            bool horizontal_scale = config.scaling.Value() != config.NoScale;
+            bool vertical_scale = config.scaling.Value() == config.ScaleXY;
 
-            u32 output_width = config.output_width >> horizontal_scale;
-            u32 output_height = config.output_height >> vertical_scale;
+            u32 output_width = config.output_width.Value() >> horizontal_scale;
+            u32 output_height = config.output_height.Value() >> vertical_scale;
 
-            u32 input_size = config.input_width * config.input_height * GPU::Regs::BytesPerPixel(config.input_format);
-            u32 output_size = output_width * output_height * GPU::Regs::BytesPerPixel(config.output_format);
+            u32 input_size = config.input_width.Value() * config.input_height.Value() * GPU::Regs::BytesPerPixel(config.input_format.Value());
+            u32 output_size = output_width * output_height * GPU::Regs::BytesPerPixel(config.output_format.Value());
 
             VideoCore::g_renderer->rasterizer->FlushRegion(config.GetPhysicalInputAddress(), input_size);
 
@@ -243,36 +243,36 @@ inline void Write(u32 addr, const T data) {
                     u32 input_x = x << horizontal_scale;
                     u32 input_y = y << vertical_scale;
 
-                    if (config.flip_vertically) {
+                    if (config.flip_vertically.ToBool()) {
                         // Flip the y value of the output data,
                         // we do this after calculating the [x,y] position of the input image
                         // to account for the scaling options.
                         y = output_height - y - 1;
                     }
 
-                    u32 dst_bytes_per_pixel = GPU::Regs::BytesPerPixel(config.output_format);
-                    u32 src_bytes_per_pixel = GPU::Regs::BytesPerPixel(config.input_format);
+                    u32 dst_bytes_per_pixel = GPU::Regs::BytesPerPixel(config.output_format.Value());
+                    u32 src_bytes_per_pixel = GPU::Regs::BytesPerPixel(config.input_format.Value());
                     u32 src_offset;
                     u32 dst_offset;
 
-                    if (config.input_linear) {
-                        if (!config.dont_swizzle) {
+                    if (config.input_linear.ToBool()) {
+                        if (!config.dont_swizzle.ToBool()) {
                             // Interpret the input as linear and the output as tiled
                             u32 coarse_y = y & ~7;
                             u32 stride = output_width * dst_bytes_per_pixel;
 
-                            src_offset = (input_x + input_y * config.input_width) * src_bytes_per_pixel;
+                            src_offset = (input_x + input_y * config.input_width.Value()) * src_bytes_per_pixel;
                             dst_offset = VideoCore::GetMortonOffset(x, y, dst_bytes_per_pixel) + coarse_y * stride;
                         } else {
                            // Both input and output are linear
-                            src_offset = (input_x + input_y * config.input_width) * src_bytes_per_pixel;
+                            src_offset = (input_x + input_y * config.input_width.Value()) * src_bytes_per_pixel;
                             dst_offset = (x + y * output_width) * dst_bytes_per_pixel;
                         }
                     } else {
-                        if (!config.dont_swizzle) {
+                        if (!config.dont_swizzle.ToBool()) {
                             // Interpret the input as tiled and the output as linear
                             u32 coarse_y = input_y & ~7;
-                            u32 stride = config.input_width * src_bytes_per_pixel;
+                            u32 stride = config.input_width.Value() * src_bytes_per_pixel;
 
                             src_offset = VideoCore::GetMortonOffset(input_x, input_y, src_bytes_per_pixel) + coarse_y * stride;
                             dst_offset = (x + y * output_width) * dst_bytes_per_pixel;
@@ -282,7 +282,7 @@ inline void Write(u32 addr, const T data) {
                             u32 out_stride = output_width * dst_bytes_per_pixel;
 
                             u32 in_coarse_y = input_y & ~7;
-                            u32 in_stride = config.input_width * src_bytes_per_pixel;
+                            u32 in_stride = config.input_width.Value() * src_bytes_per_pixel;
 
                             src_offset = VideoCore::GetMortonOffset(input_x, input_y, src_bytes_per_pixel) + in_coarse_y * in_stride;
                             dst_offset = VideoCore::GetMortonOffset(x, y, dst_bytes_per_pixel) + out_coarse_y * out_stride;
@@ -290,19 +290,19 @@ inline void Write(u32 addr, const T data) {
                     }
 
                     const u8* src_pixel = src_pointer + src_offset;
-                    src_color = DecodePixel(config.input_format, src_pixel);
-                    if (config.scaling == config.ScaleX) {
-                        Math::Vec4<u8> pixel = DecodePixel(config.input_format, src_pixel + src_bytes_per_pixel);
+                    src_color = DecodePixel(config.input_format.Value(), src_pixel);
+                    if (config.scaling.Value() == config.ScaleX) {
+                        Math::Vec4<u8> pixel = DecodePixel(config.input_format.Value(), src_pixel + src_bytes_per_pixel);
                         src_color = ((src_color + pixel) / 2).Cast<u8>();
-                    } else if (config.scaling == config.ScaleXY) {
-                        Math::Vec4<u8> pixel1 = DecodePixel(config.input_format, src_pixel + 1 * src_bytes_per_pixel);
-                        Math::Vec4<u8> pixel2 = DecodePixel(config.input_format, src_pixel + 2 * src_bytes_per_pixel);
-                        Math::Vec4<u8> pixel3 = DecodePixel(config.input_format, src_pixel + 3 * src_bytes_per_pixel);
+                    } else if (config.scaling.Value() == config.ScaleXY) {
+                        Math::Vec4<u8> pixel1 = DecodePixel(config.input_format.Value(), src_pixel + 1 * src_bytes_per_pixel);
+                        Math::Vec4<u8> pixel2 = DecodePixel(config.input_format.Value(), src_pixel + 2 * src_bytes_per_pixel);
+                        Math::Vec4<u8> pixel3 = DecodePixel(config.input_format.Value(), src_pixel + 3 * src_bytes_per_pixel);
                         src_color = (((src_color + pixel1) + (pixel2 + pixel3)) / 4).Cast<u8>();
                     }
 
                     u8* dst_pixel = dst_pointer + dst_offset;
-                    switch (config.output_format) {
+                    switch (config.output_format.Value()) {
                     case Regs::PixelFormat::RGBA8:
                         Color::EncodeRGBA8(src_color, dst_pixel);
                         break;
@@ -331,7 +331,7 @@ inline void Write(u32 addr, const T data) {
             }
 
             LOG_TRACE(HW_GPU, "DisplayTriggerTransfer: 0x%08x bytes from 0x%08x(%ux%u)-> 0x%08x(%ux%u), dst format %x, flags 0x%08X",
-                      config.output_height * output_width * GPU::Regs::BytesPerPixel(config.output_format),
+                      config.output_height.Value() * output_width * GPU::Regs::BytesPerPixel(config.output_format.Value()),
                       config.GetPhysicalInputAddress(), config.input_width.Value(), config.input_height.Value(),
                       config.GetPhysicalOutputAddress(), output_width, output_height,
                       config.output_format.Value(), config.flags);
@@ -444,16 +444,16 @@ void Init() {
     framebuffer_sub.address_left1  = 0x1848F000;
     framebuffer_sub.address_left2  = 0x184C7800;
 
-    framebuffer_top.width = 240;
-    framebuffer_top.height = 400;
+    framebuffer_top.width.Assign(240);
+    framebuffer_top.height.Assign(400);
     framebuffer_top.stride = 3 * 240;
-    framebuffer_top.color_format = Regs::PixelFormat::RGB8;
+    framebuffer_top.color_format.Assign(Regs::PixelFormat::RGB8);
     framebuffer_top.active_fb = 0;
 
-    framebuffer_sub.width = 240;
-    framebuffer_sub.height = 320;
+    framebuffer_sub.width.Assign(240);
+    framebuffer_sub.height.Assign(320);
     framebuffer_sub.stride = 3 * 240;
-    framebuffer_sub.color_format = Regs::PixelFormat::RGB8;
+    framebuffer_sub.color_format.Assign(Regs::PixelFormat::RGB8);
     framebuffer_sub.active_fb = 0;
 
     last_skip_frame = false;

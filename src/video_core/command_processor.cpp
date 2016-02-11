@@ -156,12 +156,12 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
                 u32 load_address = base_address + loader_config.data_offset;
 
                 // TODO: What happens if a loader overwrites a previous one's data?
-                for (unsigned component = 0; component < loader_config.component_count; ++component) {
+                for (unsigned component = 0; component < loader_config.component_count.Value(); ++component) {
                     if (component >= 12)
                         LOG_ERROR(HW_GPU, "Overflow in the vertex attribute loader %u trying to load component %u", loader, component);
                     u32 attribute_index = loader_config.GetComponent(component);
                     vertex_attribute_sources[attribute_index] = load_address;
-                    vertex_attribute_strides[attribute_index] = static_cast<u32>(loader_config.byte_count);
+                    vertex_attribute_strides[attribute_index] = static_cast<u32>(loader_config.byte_count.Value());
                     vertex_attribute_formats[attribute_index] = attribute_config.GetFormat(attribute_index);
                     vertex_attribute_elements[attribute_index] = attribute_config.GetNumElements(attribute_index);
                     vertex_attribute_element_size[attribute_index] = attribute_config.GetElementSizeInBytes(attribute_index);
@@ -173,9 +173,9 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
             bool is_indexed = (id == PICA_REG_INDEX(trigger_draw_indexed));
 
             const auto& index_info = regs.index_array;
-            const u8* index_address_8 = Memory::GetPhysicalPointer(base_address + index_info.offset);
+            const u8* index_address_8 = Memory::GetPhysicalPointer(base_address + index_info.offset.Value());
             const u16* index_address_16 = (u16*)index_address_8;
-            bool index_u16 = index_info.format != 0;
+            bool index_u16 = index_info.format.Value() != 0;
 
 #if PICA_DUMP_GEOMETRY
             DebugUtils::GeometryDumper geometry_dumper;
@@ -191,7 +191,7 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
 
                     u8* texture_data = Memory::GetPhysicalPointer(texture.config.GetPhysicalAddress());
                     if (g_debug_context && Pica::g_debug_context->recorder)
-                        g_debug_context->recorder->MemoryAccessed(texture_data, Pica::Regs::NibblesPerPixel(texture.format) * texture.config.width / 2 * texture.config.height, texture.config.GetPhysicalAddress());
+                        g_debug_context->recorder->MemoryAccessed(texture_data, Pica::Regs::NibblesPerPixel(texture.format) * texture.config.width.Value() / 2 * texture.config.height.Value(), texture.config.GetPhysicalAddress());
                 }
             }
 
@@ -249,7 +249,7 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
                 if (is_indexed) {
                     if (g_debug_context && Pica::g_debug_context->recorder) {
                         int size = index_u16 ? 2 : 1;
-                        memory_accesses.AddAccess(base_address + index_info.offset + size * index, size);
+                        memory_accesses.AddAccess(base_address + index_info.offset.Value() + size * index, size);
                     }
 
                     for (unsigned int i = 0; i < VERTEX_CACHE_SIZE; ++i) {
@@ -377,7 +377,7 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
         {
             int index = (id - PICA_REG_INDEX_WORKAROUND(vs.int_uniforms[0], 0x2b1));
             auto values = regs.vs.int_uniforms[index];
-            g_state.vs.uniforms.i[index] = Math::Vec4<u8>(values.x, values.y, values.z, values.w);
+            g_state.vs.uniforms.i[index] = Math::Vec4<u8>(values.x.Value(), values.y.Value(), values.z.Value(), values.w.Value());
             LOG_TRACE(HW_GPU, "Set integer uniform %d to %02x %02x %02x %02x",
                       index, values.x.Value(), values.y.Value(), values.z.Value(), values.w.Value());
             break;
@@ -405,10 +405,10 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
                 (float_regs_counter >= 3 && !uniform_setup.IsFloat32())) {
                 float_regs_counter = 0;
 
-                auto& uniform = g_state.vs.uniforms.f[uniform_setup.index];
+                auto& uniform = g_state.vs.uniforms.f[uniform_setup.index.Value()];
 
-                if (uniform_setup.index > 95) {
-                    LOG_ERROR(HW_GPU, "Invalid VS uniform index %d", (int)uniform_setup.index);
+                if (uniform_setup.index.Value() > 95) {
+                    LOG_ERROR(HW_GPU, "Invalid VS uniform index %d", (int)uniform_setup.index.Value());
                     break;
                 }
 
@@ -429,7 +429,7 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
                           uniform.w.ToFloat32());
 
                 // TODO: Verify that this actually modifies the register!
-                uniform_setup.index = uniform_setup.index + 1;
+                uniform_setup.index.Assign(uniform_setup.index.Value() + 1);
             }
             break;
         }
@@ -487,11 +487,11 @@ void ProcessCommandList(const u32* list, u32 size) {
         u32 value = *g_state.cmd_list.current_ptr++;
         const CommandHeader header = { *g_state.cmd_list.current_ptr++ };
 
-        WritePicaReg(header.cmd_id, value, header.parameter_mask);
+        WritePicaReg(header.cmd_id.Value(), value, header.parameter_mask.Value());
 
-        for (unsigned i = 0; i < header.extra_data_length; ++i) {
-            u32 cmd = header.cmd_id + (header.group_commands ? i + 1 : 0);
-            WritePicaReg(cmd, *g_state.cmd_list.current_ptr++, header.parameter_mask);
+        for (unsigned i = 0; i < header.extra_data_length.Value(); ++i) {
+            u32 cmd = header.cmd_id.Value() + (header.group_commands.ToBool() ? i + 1 : 0);
+            WritePicaReg(cmd, *g_state.cmd_list.current_ptr++, header.parameter_mask.Value());
          }
     }
 }

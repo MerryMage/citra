@@ -193,20 +193,20 @@ union ResultCode {
     explicit ResultCode(u32 raw) : raw(raw) {}
     ResultCode(ErrorDescription description_, ErrorModule module_,
             ErrorSummary summary_, ErrorLevel level_) : raw(0) {
-        description = description_;
-        module = module_;
-        summary = summary_;
-        level = level_;
+        description.Assign(description_);
+        module.Assign(module_);
+        summary.Assign(summary_);
+        level.Assign(level_);
     }
 
     ResultCode& operator=(const ResultCode& o) { raw = o.raw; return *this; }
 
     bool IsSuccess() const {
-        return is_error == 0;
+        return is_error.Value() == 0;
     }
 
     bool IsError() const {
-        return is_error == 1;
+        return is_error.Value() == 1;
     }
 };
 

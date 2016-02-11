@@ -116,16 +116,16 @@ void RendererOpenGL::SwapBuffers() {
         LCD::Regs::ColorFill color_fill = {0};
         LCD::Read(color_fill.raw, lcd_color_addr);
 
-        if (color_fill.is_enabled) {
-            LoadColorToActiveGLTexture(color_fill.color_r, color_fill.color_g, color_fill.color_b, textures[i]);
+        if (color_fill.is_enabled.ToBool()) {
+            LoadColorToActiveGLTexture(color_fill.color_r.Value(), color_fill.color_g.Value(), color_fill.color_b.Value(), textures[i]);
 
             // Resize the texture in case the framebuffer size has changed
             textures[i].width = 1;
             textures[i].height = 1;
         } else {
-            if (textures[i].width != (GLsizei)framebuffer.width ||
-                textures[i].height != (GLsizei)framebuffer.height ||
-                textures[i].format != framebuffer.color_format) {
+            if (textures[i].width != (GLsizei)framebuffer.width.Value() ||
+                textures[i].height != (GLsizei)framebuffer.height.Value() ||
+                textures[i].format != framebuffer.color_format.Value()) {
                 // Reallocate texture if the framebuffer size has changed.
                 // This is expected to not happen very often and hence should not be a
                 // performance problem.
@@ -134,8 +134,8 @@ void RendererOpenGL::SwapBuffers() {
             LoadFBToActiveGLTexture(framebuffer, textures[i]);
 
             // Resize the texture in case the framebuffer size has changed
-            textures[i].width = framebuffer.width;
-            textures[i].height = framebuffer.height;
+            textures[i].width = framebuffer.width.Value();
+            textures[i].height = framebuffer.height.Value();
         }
     }
 
@@ -179,7 +179,7 @@ void RendererOpenGL::LoadFBToActiveGLTexture(const GPU::Regs::FramebufferConfig&
 
     const u8* framebuffer_data = Memory::GetPhysicalPointer(framebuffer_addr);
 
-    int bpp = GPU::Regs::BytesPerPixel(framebuffer.color_format);
+    int bpp = GPU::Regs::BytesPerPixel(framebuffer.color_format.Value());
     size_t pixel_stride = framebuffer.stride / bpp;
 
     // OpenGL only supports specifying a stride in units of pixels, not bytes, unfortunately
@@ -200,7 +200,7 @@ void RendererOpenGL::LoadFBToActiveGLTexture(const GPU::Regs::FramebufferConfig&
     //       differ from the LCD resolution.
     // TODO: Applications could theoretically crash Citra here by specifying too large
     //       framebuffer sizes. We should make sure that this cannot happen.
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, framebuffer.width, framebuffer.height,
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, framebuffer.width.Value(), framebuffer.height.Value(),
                     texture.gl_format, texture.gl_type, framebuffer_data);
 
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
@@ -281,12 +281,12 @@ void RendererOpenGL::InitOpenGLObjects() {
 
 void RendererOpenGL::ConfigureFramebufferTexture(TextureInfo& texture,
                                                  const GPU::Regs::FramebufferConfig& framebuffer) {
-    GPU::Regs::PixelFormat format = framebuffer.color_format;
+    GPU::Regs::PixelFormat format = framebuffer.color_format.Value();
     GLint internal_format;
 
     texture.format = format;
-    texture.width = framebuffer.width;
-    texture.height = framebuffer.height;
+    texture.width = framebuffer.width.Value();
+    texture.height = framebuffer.height.Value();
 
     switch (format) {
     case GPU::Regs::PixelFormat::RGBA8:

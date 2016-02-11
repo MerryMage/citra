@@ -114,32 +114,15 @@
 template<std::size_t position, std::size_t bits, typename T>
 struct BitField
 {
-private:
-    // This constructor might be considered ambiguous:
-    // Would it initialize the storage or just the bitfield?
-    // Hence, delete it. Use the assignment operator to set bitfield values!
+    // This constructor and assignment operator might be considered ambiguous:
+    // Would they initialize the storage or just the bitfield?
+    // Hence, delete them. Use the Assign method to set bitfield values!
     BitField(T val) = delete;
+    BitField& operator=(T val) = delete;
 
-public:
     // Force default constructor to be created
     // so that we can use this within unions
     BitField() = default;
-
-    // We explicitly delete the copy assigment operator here, because the
-    // default copy assignment would copy the full storage value, rather than
-    // just the bits relevant to this particular bit field.
-    BitField& operator=(const BitField&) = delete;
-
-    FORCE_INLINE BitField& operator=(T val)
-    {
-        Assign(val);
-        return *this;
-    }
-
-    FORCE_INLINE operator T() const
-    {
-        return Value();
-    }
 
     FORCE_INLINE void Assign(const T& value) {
         storage = (storage & ~GetMask()) | (((StorageType)value << position) & GetMask());
@@ -158,7 +141,6 @@ public:
         }
     }
 
-    // TODO: we may want to change this to explicit operator bool() if it's bug-free in VS2015
     FORCE_INLINE bool ToBool() const
     {
         return Value() != 0;
