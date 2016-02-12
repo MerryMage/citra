@@ -104,7 +104,10 @@ private:
 
 struct SourceConfiguration {
     union {
-        u32_dsp dirty;
+        u32_le dirty_raw;
+
+        BitField<2, 1, u32_le> adpcm_coefficients_dirty;
+        BitField<3, 1, u32_le> partial_embedded_buffer_dirty; ///< Tends to be set when a looped buffer is queued.
 
         BitField<16, 1, u32_le> enable_dirty;
         BitField<17, 1, u32_le> interpolation_dirty;
@@ -122,9 +125,6 @@ struct SourceConfiguration {
         BitField<29, 1, u32_le> reset_flag;
 
         BitField<31, 1, u32_le> embedded_buffer_dirty;
-
-        BitField<2, 1, u32_le> adpcm_coefficients_dirty;
-        BitField<3, 1, u32_le> partial_embedded_buffer_dirty; ///< Tends to be set when a looped buffer is queued.
     };
 
     // Gain control
@@ -288,7 +288,7 @@ ASSERT_POD_STRUCT(SourceStatus, 12);
  */
 struct DelayEffect {
     union {
-        u16_le dirty;
+        u16_le dirty_raw;
         BitField<0, 1, u16_le> enable_dirty;
         BitField<1, 1, u16_le> work_buffer_address_dirty;
         BitField<2, 1, u16_le> other_dirty; ///< Set when anything else has been changed
@@ -313,7 +313,14 @@ ASSERT_POD_STRUCT(ReverbEffect, 52);
 
 struct DspConfiguration {
     union {
-        u32_dsp dirty;
+        u32_le dirty_raw;
+
+        BitField<8, 1, u32_le> mixer1_enabled_dirty;
+        BitField<9, 1, u32_le> mixer2_enabled_dirty;
+        BitField<10, 1, u32_le> delay_effect_0_dirty;
+        BitField<11, 1, u32_le> delay_effect_1_dirty;
+        BitField<12, 1, u32_le> reverb_effect_0_dirty;
+        BitField<13, 1, u32_le> reverb_effect_1_dirty;
 
         BitField<16, 1, u32_le> volume_0_dirty;
 
@@ -322,13 +329,6 @@ struct DspConfiguration {
         BitField<26, 1, u32_le> output_format_dirty;
         BitField<27, 1, u32_le> limiter_enabled_dirty;
         BitField<28, 1, u32_le> headphones_connected_dirty;
-
-        BitField<8, 1, u32_le> mixer1_enabled_dirty;
-        BitField<9, 1, u32_le> mixer2_enabled_dirty;
-        BitField<10, 1, u32_le> delay_effect_0_dirty;
-        BitField<11, 1, u32_le> delay_effect_1_dirty;
-        BitField<12, 1, u32_le> reverb_effect_0_dirty;
-        BitField<13, 1, u32_le> reverb_effect_1_dirty;
     };
 
     /// The DSP has three intermediate audio mixers. This controls the volume level (0.0-1.0) for each at the final mixer
