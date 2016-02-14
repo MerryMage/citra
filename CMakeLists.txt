@@ -42,6 +42,8 @@ option(ENABLE_QT "Enable the Qt frontend" ON)
 option(CITRA_USE_BUNDLED_QT "Download bundled Qt binaries" OFF)
 option(CITRA_FORCE_QT4 "Use Qt4 even if Qt5 is available." OFF)
 
+option(CITRA_USE_BUNDLED_SOUNDIO "Download bundled libsoundio binaries" OFF)
+
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/.git/hooks/pre-commit)
     message(STATUS "Copying pre-commit hook")
     file(COPY hooks/pre-commit
@@ -209,6 +211,25 @@ if (ENABLE_QT)
         find_package(Qt4 REQUIRED COMPONENTS QtGui QtOpenGL ${QT_PREFIX_HINT})
         set(CITRA_QT_LIBS Qt4::QtGui Qt4::QtOpenGL)
     endif()
+endif()
+
+if (CITRA_USE_BUNDLED_SOUNDIO)
+    # Detect toolchain and platform
+    if (MSVC AND ARCHITECTURE_x86_64)
+        set(SOUNDIO_VER "libsoundio-1.1.0")
+    else()
+        message(FATAL_ERROR "No bundled libsoundio binaries for your toolchain. Disable CITRA_USE_BUNDLED_SOUNDIO and provide your own.")
+    endif()
+
+    if (DEFINED SOUNDIO_VER)
+        download_bundled_external("soundio/" ${SOUNDIO_VER} SOUNDIO_PREFIX)
+    endif()
+
+    set(SOUNDIO_INCLUDE_DIR "${SOUNDIO_PREFIX}/soundio" CACHE PATH "Path to libsoundio headers")
+    set(SOUNDIO_LIBRARY "${SOUNDIO_PREFIX}/x86_64/libsoundio.dll.a" CACHE FILEPATH "Path to libsoundio library")
+    set(SOUNDIO_DLL_DIR "${SOUNDIO_PREFIX}/x86_64/" CACHE PATH "Path to directory containing libsoundio.dll")
+else()
+    find_package(SoundIo REQUIRED)
 endif()
 
 # This function should be passed a list of all files in a target. It will automatically generate

@@ -4,6 +4,7 @@
 
 #include "audio_core/audio_core.h"
 #include "audio_core/hle/dsp.h"
+#include "audio_core/soundio_sink.h"
 
 #include "core/core_timing.h"
 #include "core/hle/kernel/event.h"
@@ -15,6 +16,8 @@ namespace AudioCore {
 // Audio Ticks occur about every 5 miliseconds.
 static int tick_event;                               ///< CoreTiming event
 static constexpr u64 audio_frame_ticks = 1310252ull; ///< Units: ARM11 cycles
+
+SoundIoSink sink;
 
 static void AudioTickCallback(u64 /*userdata*/, int cycles_late) {
     if (DSP::HLE::Tick()) {

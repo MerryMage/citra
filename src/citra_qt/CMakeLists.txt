@@ -81,6 +81,7 @@ else()
 endif()
 target_link_libraries(citra-qt core video_core audio_core common qhexedit)
 target_link_libraries(citra-qt ${OPENGL_gl_LIBRARY} ${CITRA_QT_LIBS})
+target_link_libraries(citra-qt ${SOUNDIO_LIBRARY})
 target_link_libraries(citra-qt ${PLATFORM_LIBRARIES})
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux|FreeBSD|OpenBSD|NetBSD")
@@ -116,6 +117,18 @@ if (Qt5_FOUND AND MSVC)
         COMMAND if not exist ${PLATFORMS} mkdir ${PLATFORMS} 2> nul
         COMMAND robocopy ${Qt5_PLATFORMS_DIR} ${PLATFORMS} qwindows$<$<CONFIG:Debug>:d>.* /NJH /NJS /NDL /NFL /NC /NS /NP || cmd /c "exit /b 0"
     )
+
+    if (CITRA_USE_BUNDLED_SOUNDIO)
+        string(REPLACE "/" "\\\\" SOUNDIO_DLL_DIR ${SOUNDIO_DLL_DIR})
+
+        # /NJH /NJS /NDL /NFL /NC /NS /NP - Silence any output
+        # cmake adds an extra check for command success which doesn't work too well with robocopy
+        # so trick it into thinking the command was successful with the || cmd /c "exit /b 0"
+        add_custom_command(TARGET citra-qt POST_BUILD
+            COMMAND robocopy ${SOUNDIO_DLL_DIR} ${DLL_DEST} libsoundio.dll /NJH /NJS /NDL /NFL /NC /NS /NP || cmd /c "exit /b 0"
+        )
+    endif()
+
     unset(Qt5_DLLS)
     unset(Qt5_DLL_DIR)
     unset(Qt5_PLATFORMS_DIR)
