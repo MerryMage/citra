@@ -22,9 +22,20 @@ set(HEADERS
             sink.h
             )
 
+if(SDL2_FOUND)
+    set(SRCS ${SRCS} sdl2_sink.cpp)
+    set(HEADERS ${HEADERS} sdl2_sink.h)
+    include_directories(${SDL2_INCLUDE_DIR})
+endif()
+
 include_directories(../../externals/soundtouch/include)
 
 create_directory_groups(${SRCS} ${HEADERS})
 
 add_library(audio_core STATIC ${SRCS} ${HEADERS})
 target_link_libraries(audio_core SoundTouch)
+
+if(SDL2_FOUND)
+    target_link_libraries(audio_core ${SDL2_LIBRARY})
+    set_property(TARGET audio_core APPEND PROPERTY COMPILE_DEFINITIONS USE_SDL2)
+endif()
