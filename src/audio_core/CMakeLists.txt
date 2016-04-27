@@ -7,6 +7,7 @@ set(SRCS
             hle/pipe.cpp
             hle/source.cpp
             interpolate.cpp
+            time_stretch.cpp
             )
 
 set(HEADERS
@@ -20,6 +21,7 @@ set(HEADERS
             hle/source.h
             interpolate.h
             sink.h
+            time_stretch.h
             )
 
 if(SDL2_FOUND)
