@@ -52,6 +52,10 @@ void Config::ReadValues() {
     Settings::values.bg_blue  = qt_config->value("bg_blue",  1.0).toFloat();
     qt_config->endGroup();
 
+    qt_config->beginGroup("Audio");
+    Settings::values.sink_id = qt_config->value("output_sink", -1).toInt();
+    qt_config->endGroup();
+
     qt_config->beginGroup("Data Storage");
     Settings::values.use_virtual_sd = qt_config->value("use_virtual_sd", true).toBool();
     qt_config->endGroup();

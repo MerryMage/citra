@@ -18,6 +18,9 @@ void Init();
 /// Add DSP address spaces to a Process.
 void AddAddressSpace(Kernel::VMManager& vm_manager);
 
+/// Select the sink to use. Returns the sink id of the sink actually selected.
+int SelectSink(int sink_id);
+
 /// Shutdown Audio Core
 void Shutdown();
 

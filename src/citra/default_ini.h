@@ -56,6 +56,11 @@ bg_red =
 bg_blue =
 bg_green =
 
+[Audio]
+# Which audio output engine to use.
+# 0: None, 1: SDL2
+output_sink =
+
 [Data Storage]
 # Whether to create a virtual SD card.
 # 1 (default): Yes, 0: No

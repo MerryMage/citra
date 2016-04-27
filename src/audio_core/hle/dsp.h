@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstddef>
+#include <memory>
 #include <type_traits>
 
 #include "audio_core/hle/common.h"
@@ -14,6 +15,10 @@
 #include "common/common_funcs.h"
 #include "common/common_types.h"
 #include "common/swap.h"
+
+namespace AudioCore {
+class Sink;
+}
 
 namespace DSP {
 namespace HLE {
@@ -529,17 +534,17 @@ void Init();
 void Shutdown();
 
 /**
- * Called by the dsp::DSP service when the semaphore is signalled, indicating the
- * end of the frame.
- */
-void SemaphoreSignalled();
-
-/**
  * Perform processing and updates state of current shared memory buffer.
  * This function is called every audio tick before triggering the audio interrupt.
  * @return Whether an audio interrupt should be triggered this frame.
  */
 bool Tick();
+
+/**
+ * Set the output sink. This must be called before calling Tick().
+ * @param sink The sink to which audio will be output to.
+ */
+void SetSink(std::unique_ptr<AudioCore::Sink> sink);
 
 } // namespace HLE
 } // namespace DSP
