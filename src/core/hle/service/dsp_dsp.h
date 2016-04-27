@@ -35,4 +35,10 @@ public:
  */
 void SignalPipeInterrupt(DSP::HLE::DspPipe pipe);
 
+/// Reset the dsp::DSP semaphore.
+void ResetSemaphore();
+
+/// Has the dsp::DSP semaphore been signalled?
+bool IsSemaphoreSignalled();
+
 } // namespace DSP_DSP

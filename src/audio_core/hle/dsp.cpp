@@ -10,8 +10,12 @@
 #include "audio_core/hle/source.h"
 #include "audio_core/sink.h"
 
+#include "core/hle/service/dsp_dsp.h"
+
 namespace DSP {
 namespace HLE {
+
+// Region management
 
 std::array<SharedMemory, 2> g_regions;
 
@@ -40,6 +44,8 @@ static SharedMemory& WriteRegion() {
     return g_regions[1 - CurrentRegionIndex()];
 }
 
+// Audio processing and mixing
+
 static std::array<Source, num_sources> sources = {
     Source(0), Source(1), Source(2), Source(3), Source(4), Source(5),
     Source(6), Source(7), Source(8), Source(9), Source(10), Source(11),
@@ -47,19 +53,7 @@ static std::array<Source, num_sources> sources = {
     Source(18), Source(19), Source(20), Source(21), Source(22), Source(23)
 };
 
-static std::unique_ptr<AudioCore::Sink> sink;
-
-void Init() {
-    DSP::HLE::ResetPipes();
-    for (auto& source : sources) {
-        source.Reset();
-    }
-}
-
-void Shutdown() {
-}
-
-bool Tick() {
+static StereoFrame16 GenerateCurrentFrame() {
     SharedMemory& read = ReadRegion();
     SharedMemory& write = WriteRegion();
 
@@ -72,7 +66,45 @@ bool Tick() {
         }
     }
 
-    return true;
+    StereoFrame16 current_frame = {};
+
+    // TODO(merry): Reverb, Delay, Mixing
+
+    return current_frame;
+}
+
+// Audio output
+
+static std::unique_ptr<AudioCore::Sink> sink;
+
+// Public interface
+
+void Init() {
+    DSP::HLE::ResetPipes();
+    for (auto& source : sources) {
+        source.Reset();
+    }
+}
+
+void Shutdown() {
+}
+
+bool Tick() {
+    bool signal_interrupt = false;
+    StereoFrame16 current_frame = {};
+
+    if (DSP_DSP::IsSemaphoreSignalled() && GetDspState() == DspState::On) {
+        // The ARM11 has finished writing to the shared memory region.
+        DSP_DSP::ResetSemaphore();
+
+        // Signal that we are done processing that shared memory region.
+        signal_interrupt = true;
+        current_frame = GenerateCurrentFrame();
+    }
+
+    // TODO(merry): Audio output
+
+    return signal_interrupt;
 }
 
 void SetSink(std::unique_ptr<AudioCore::Sink> sink_) {
