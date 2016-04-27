@@ -20,6 +20,7 @@ set(HEADERS
             hle/pipe.h
             hle/source.h
             interpolate.h
+            null_sink.h
             sink.h
             time_stretch.h
             )
