@@ -529,6 +529,12 @@ void Init();
 void Shutdown();
 
 /**
+ * Called by the dsp::DSP service when the semaphore is signalled, indicating the
+ * end of the frame.
+ */
+void SemaphoreSignalled();
+
+/**
  * Perform processing and updates state of current shared memory buffer.
  * This function is called every audio tick before triggering the audio interrupt.
  * @return Whether an audio interrupt should be triggered this frame.
