@@ -5,11 +5,14 @@
 #include <array>
 
 #include "audio_core/hle/dsp.h"
+#include "audio_core/hle/mixers.h"
 #include "audio_core/hle/pipe.h"
 #include "audio_core/hle/source.h"
 
 namespace DSP {
 namespace HLE {
+
+// Region management
 
 std::array<SharedMemory, 2> g_regions;
 
@@ -38,33 +41,61 @@ static SharedMemory& WriteRegion() {
     return g_regions[1 - CurrentRegionIndex()];
 }
 
-std::array<Source, num_sources> sources = {
+// Audio processing and mixing
+
+static std::array<Source, num_sources> sources = {
     Source(0), Source(1), Source(2), Source(3), Source(4), Source(5),
     Source(6), Source(7), Source(8), Source(9), Source(10), Source(11),
     Source(12), Source(13), Source(14), Source(15), Source(16), Source(17),
     Source(18), Source(19), Source(20), Source(21), Source(22), Source(23)
 };
+static Mixers mixers;
+
+static StereoFrame16 GenerateCurrentFrame() {
+    SharedMemory& read = ReadRegion();
+    SharedMemory& write = WriteRegion();
+
+    std::array<QuadFrame32, 3> intermediate_mixes = {{{}}};
+
+    for (size_t i = 0; i < num_sources; i++) {
+        write.source_statuses.status[i] = sources[i].Tick(read.source_configurations.config[i], read.adpcm_coefficients.coeff[i]);
+        for (size_t mix = 0; mix < 3; mix++) {
+            sources[i].MixInto(intermediate_mixes[mix], mix);
+        }
+    }
+
+    // TODO(merry): Reverb, Delay effects
+
+    write.dsp_status = mixers.Tick(read.dsp_configuration, read.intermediate_mix_samples, write.intermediate_mix_samples, intermediate_mixes);
+
+    StereoFrame16 output_frame = mixers.GetOutput();
+
+    // Write current output frame to the shared memory region
+    std::transform(output_frame.begin(), output_frame.end(), write.final_samples.pcm16.begin(),
+        [](const auto& sample) -> std::array<s16_le, 2> {
+            return { s16_le(sample[0]), s16_le(sample[1]) };
+        });
+
+    return output_frame;
+}
+
+// Public Interface
 
 void Init() {
     DSP::HLE::ResetPipes();
     for (auto& source : sources) {
         source.Reset();
     }
+    mixers.Reset();
 }
 
 void Shutdown() {
 }
 
 bool Tick() {
-    SharedMemory& read = ReadRegion();
-    SharedMemory& write = WriteRegion();
+    StereoFrame16 current_frame = {{}};
 
-    for (size_t i = 0; i < num_sources; i++) {
-        write.source_statuses.status[i] = sources[i].Tick(read.source_configurations.config[i], read.adpcm_coefficients.coeff[i]);
-        for (size_t mix = 0; mix < 3; mix++) {
-            //source[i].MixInto(/*...*/, mix);
-        }
-    }
+    current_frame = GenerateCurrentFrame();
 
     return true;
 }
