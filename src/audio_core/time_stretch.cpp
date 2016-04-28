@@ -22,8 +22,8 @@ namespace AudioCore {
 constexpr double MIN_RATIO = 0.1;
 constexpr double MAX_RATIO = 100.0;
 
-constexpr double MIN_DELAY_TIME = 0.1; // Units: seconds
-constexpr double MAX_DELAY_TIME = 0.4; // Units: seconds
+constexpr double MIN_DELAY_TIME = 0.05; // Units: seconds
+constexpr double MAX_DELAY_TIME = 0.25; // Units: seconds
 constexpr size_t DROP_FRAMES_SAMPLE_DELAY = 16000; // Units: samples
 
 constexpr double SMOOTHING_FACTOR = 0.007;
@@ -50,6 +50,8 @@ std::vector<s16> TimeStretcher::Process(size_t samples_in_queue) {
     impl->smoothed_ratio = ClampRatio(impl->smoothed_ratio);
 
     impl->soundtouch.setTempo(1.0 / impl->smoothed_ratio);
+
+    printf("%f\n", impl->smoothed_ratio);
 
     std::vector<s16> samples = GetSamples();
     if (samples_in_queue >= DROP_FRAMES_SAMPLE_DELAY) {
@@ -121,12 +123,6 @@ double TimeStretcher::CorrectForUnderAndOverflow(double ratio, size_t sample_del
         ratio = ratio > 1.0 ? ratio * ratio : sqrt(ratio);
     } else if (sample_delay > max_sample_delay) {
         ratio = ratio > 1.0 ? sqrt(ratio) : ratio * ratio;
-    } else if (sample_delay > ideal_sample_delay) {
-        double delta = static_cast<double>(sample_delay - ideal_sample_delay);
-        ratio *= 1.0 - (0.1 + delta / delay_window);
-    } else if (sample_delay < ideal_sample_delay) {
-        double delta = static_cast<double>(ideal_sample_delay - sample_delay);
-        ratio *= 1.0 + (0.1 + delta / delay_window);
     }
 
     return ClampRatio(ratio);
