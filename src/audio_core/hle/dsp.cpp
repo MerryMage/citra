@@ -104,7 +104,7 @@ void Init() {
 }
 
 void Shutdown() {
-    time_stretcher.NullSamples();
+    time_stretcher.Flush();
     while (true) {
         std::vector<s16> residual_audio = time_stretcher.Process(sink->SamplesInQueue());
         if (residual_audio.empty())

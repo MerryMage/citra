@@ -31,32 +31,36 @@ constexpr double SMOOTHING_FACTOR = 0.007;
 struct TimeStretcher::Impl {
     soundtouch::SoundTouch soundtouch;
 
-    steady_clock::time_point frame_timer = steady_clock::now();
+    /// Desired output sample rate. Audio is resampled if sample_rate != AudioCore::native_sample_rate.
+    double sample_rate = static_cast<double>(native_sample_rate);
 
+    /// Current time ratio we use for audio stretching.
     double smoothed_ratio = 1.0;
 
+    /// Number of samples fed to AddSamples. Reset by CalculateCurrentRatio.
     size_t samples_queued = 0;
-
-    double sample_rate = static_cast<double>(AudioCore::native_sample_rate);
+    /// Used by CalculateCurrentRatio to time audio frames.
+    steady_clock::time_point frame_timer = steady_clock::now();
 };
 
 std::vector<s16> TimeStretcher::Process(size_t samples_in_queue) {
+    // This is a very simple algorithm but it works and is stable.
+
     double ratio = CalculateCurrentRatio();
-
-    // This is a very simple algorithm, but it works and is stable.
-
     ratio = CorrectForUnderAndOverflow(ratio, samples_in_queue);
+
+    // Here we smooth the ratio over time so that we don't call setTempo with wildly varying ratios.
+    // Not smoothing the ratio results in undesirable audio artifacts.
     impl->smoothed_ratio = (1.0 - SMOOTHING_FACTOR) * impl->smoothed_ratio + SMOOTHING_FACTOR * ratio;
     impl->smoothed_ratio = ClampRatio(impl->smoothed_ratio);
 
     impl->soundtouch.setTempo(1.0 / impl->smoothed_ratio);
 
-    printf("%f\n", impl->smoothed_ratio);
-
     std::vector<s16> samples = GetSamples();
     if (samples_in_queue >= DROP_FRAMES_SAMPLE_DELAY) {
-        samples.clear();
+        // If we have far too much build-up downstream, drop frames so we don't back up too much.
         LOG_DEBUG(Audio, "Dropping frames!");
+        return {};
     }
     return samples;
 }
@@ -66,7 +70,7 @@ TimeStretcher::TimeStretcher() : impl(new Impl) {
     impl->soundtouch.setPitch(1.0);
     impl->soundtouch.setRate(1.0);
     impl->soundtouch.setChannels(2);
-    impl->soundtouch.setSampleRate(AudioCore::native_sample_rate);
+    impl->soundtouch.setSampleRate(native_sample_rate);
 }
 
 TimeStretcher::~TimeStretcher() {
@@ -75,16 +79,15 @@ TimeStretcher::~TimeStretcher() {
 
 void TimeStretcher::SetOutputSampleRate(unsigned int sample_rate) {
     impl->sample_rate = static_cast<double>(sample_rate);
-    impl->soundtouch.setRate(impl->sample_rate / static_cast<double>(AudioCore::native_sample_rate));
+    impl->soundtouch.setRate(impl->sample_rate / static_cast<double>(native_sample_rate));
 }
 
 void TimeStretcher::AddSamples(const s16* buffer, size_t num_samples) {
-    // FIXME: lol don't do this c-style cast
     impl->soundtouch.putSamples(buffer, static_cast<uint>(num_samples));
     impl->samples_queued += num_samples;
 }
 
-void TimeStretcher::NullSamples() {
+void TimeStretcher::Flush() {
     impl->soundtouch.flush();
 }
 
@@ -96,7 +99,7 @@ double TimeStretcher::CalculateCurrentRatio() {
     const steady_clock::time_point now = steady_clock::now();
     const std::chrono::duration<double> duration = now - impl->frame_timer;
 
-    const double expected_time = static_cast<double>(impl->samples_queued) / static_cast<double>(AudioCore::native_sample_rate);
+    const double expected_time = static_cast<double>(impl->samples_queued) / static_cast<double>(native_sample_rate);
     const double actual_time = duration.count();
 
     double ratio;
@@ -116,12 +119,11 @@ double TimeStretcher::CorrectForUnderAndOverflow(double ratio, size_t sample_del
     const size_t min_sample_delay = static_cast<size_t>(MIN_DELAY_TIME * impl->sample_rate);
     const size_t max_sample_delay = static_cast<size_t>(MAX_DELAY_TIME * impl->sample_rate);
 
-    const size_t ideal_sample_delay = (min_sample_delay + max_sample_delay) / 2;
-    const double delay_window = static_cast<double>((max_sample_delay - min_sample_delay) / 2);
-
     if (sample_delay < min_sample_delay) {
+        // Slow down audio.
         ratio = ratio > 1.0 ? ratio * ratio : sqrt(ratio);
     } else if (sample_delay > max_sample_delay) {
+        // Speed up audio.
         ratio = ratio > 1.0 ? sqrt(ratio) : ratio * ratio;
     }
 

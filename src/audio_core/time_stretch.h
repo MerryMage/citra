@@ -22,16 +22,16 @@ public:
     void SetOutputSampleRate(unsigned int sample_rate);
 
     /**
-     * Adds samples to the stretcher.
+     * Adds samples to be processed.
      * @param sample_buffer Buffer of samples in interleaved stereo PCM16 format.
      * @param num_sample Number of samples.
      */
     void AddSamples(const s16* sample_buffer, size_t num_samples);
 
     /**
-     * Clear out the audio remaining in the internal buffers.
+     * Flush out audio remaining in internal buffers.
      */
-    void NullSamples();
+    void Flush();
 
     /**
      * Does the audio-stretching.
