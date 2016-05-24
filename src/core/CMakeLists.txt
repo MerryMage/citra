@@ -9,6 +9,7 @@ set(SRCS
             arm/jit/decoder/thumb.cpp
             arm/jit/ir.cpp
             arm/jit/ir_builder.cpp
+            arm/jit/translate.cpp
             arm/skyeye_common/armstate.cpp
             arm/skyeye_common/armsupp.cpp
             arm/skyeye_common/vfp/vfp.cpp
@@ -145,6 +146,7 @@ set(HEADERS
             arm/jit/decoder/decoder.h
             arm/jit/ir.h
             arm/jit/ir_builder.h
+            arm/jit/translate.h
             arm/skyeye_common/arm_regformat.h
             arm/skyeye_common/armstate.h
             arm/skyeye_common/armsupp.h
