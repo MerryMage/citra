@@ -19,8 +19,10 @@ using Type = MicroType;
 using Flag = MicroArmFlags;
 
 const std::map<MicroOp, const MicroOpInfo> micro_op_info {{
-    { Op::ConstU32,  { Op::ConstU32,  Type::U32,  Flag::None, Flag::None, {} }},
-    { Op::GetGPR,    { Op::GetGPR,    Type::U32,  Flag::None, Flag::None, {} }},
+    { Op::ConstU32,     { Op::ConstU32,     Type::U32,  Flag::None, Flag::None, {} } },
+    { Op::GetGPR,       { Op::GetGPR,       Type::U32,  Flag::None, Flag::None, {} } },
+    { Op::Add,          { Op::Add,          Type::U32,  Flag::None, Flag::NZCV, { Type::U32, Type::U32 } } },
+    { Op::AddWithCarry, { Op::AddWithCarry, Type::U32,  Flag::C,    Flag::NZCV, { Type::U32, Type::U32 } } },
 }};
 
 } // namespace OpTable
@@ -32,6 +34,11 @@ MicroOpInfo GetMicroOpInfo(MicroOp op) {
 }
 
 // MicroArmFlags free functions
+
+MicroArmFlags operator~(MicroArmFlags a) {
+    using underlyingT = std::underlying_type_t<MicroArmFlags>;
+    return static_cast<MicroArmFlags>(~static_cast<underlyingT>(a));
+}
 
 MicroArmFlags operator|(MicroArmFlags a, MicroArmFlags b) {
     using underlyingT = std::underlying_type_t<MicroArmFlags>;
@@ -69,19 +76,39 @@ void MicroValue::ReplaceUseOfXWithY(std::shared_ptr<MicroValue> x, std::shared_p
     ASSERT_MSG(false, "ReplaceUseOfXWithY: This MicroValue type doesn't use any values. Bug in use management code.");
 }
 
-// MicroInst class member definitions
+// MicroSetGPR
 
-MicroInst::MicroInst(MicroOp op_, std::initializer_list<std::shared_ptr<MicroValue>> values) : op(op_) {
+void MicroSetGPR::SetArg(std::shared_ptr<MicroValue> value) {
+    auto this_ = shared_from_this();
+
+    if (auto prev_value = arg.lock()) {
+        prev_value->RemoveUse(this_);
+    }
+
+    ASSERT(value->GetType() == MicroType::U32);
+    arg = value;
+
+    value->AddUse(this_);
+}
+
+std::shared_ptr<MicroValue> MicroSetGPR::GetArg() const {
+    ASSERT(!arg.expired());
+    return arg.lock();
+}
+
+
+// MicroInst class member definitions}
+
+MicroInst::MicroInst(MicroOp op_, std::initializer_list<std::shared_ptr<MicroValue>> values)
+    : op(op_), write_flags(micro_op_info.at(op).default_write_flags)
+{
     ASSERT(micro_op_info.at(op).NumArgs() == values.size());
-
     args.resize(values.size());
 
     size_t index = 0;
     for (auto& value : values) {
         SetArg(index++, value);
     }
-
-    write_flags = micro_op_info.at(op).default_write_flags;
 }
 
 MicroType MicroInst::GetType() const {
@@ -95,20 +122,19 @@ size_t MicroInst::NumArgs() const {
 void MicroInst::SetArg(size_t index, std::shared_ptr<MicroValue> value) {
     auto this_ = shared_from_this();
 
-    if (auto prev_value = args.at(index).value.lock()) {
+    if (auto prev_value = args.at(index).lock()) {
         prev_value->RemoveUse(this_);
     }
 
     ASSERT(value->GetType() == micro_op_info.at(op).types.at(index));
-    args.at(index).value = value;
-    args.at(index).use_owner = this_;
+    args.at(index) = value;
 
     value->AddUse(this_);
 }
 
 std::shared_ptr<MicroValue> MicroInst::GetArg(size_t index) const {
-    ASSERT(!args.at(index).value.expired());
-    return args.at(index).value.lock();
+    ASSERT(!args.at(index).expired());
+    return args.at(index).lock();
 }
 
 MicroArmFlags MicroInst::ReadFlags() const {
@@ -121,18 +147,17 @@ MicroArmFlags MicroInst::WriteFlags() const {
 
 void MicroInst::ReplaceUseOfXWithY(std::shared_ptr<MicroValue> x, std::shared_ptr<MicroValue> y) {
     bool has_use = false;
+    auto this_ = shared_from_this();
 
     // Note that there may be multiple uses of x.
     for (auto& arg : args) {
-        if (arg.value.lock() == x) {
-            arg.value = y;
+        if (arg.lock() == x) {
+            arg = y;
             has_use = true;
+            x->RemoveUse(this_);
+            y->AddUse(this_);
         }
     }
-
-    auto this_ = shared_from_this();
-    x->RemoveUse(this_);
-    y->AddUse(this_);
 
     ASSERT_MSG(has_use, "ReplaceUseOfXWithY: This MicroInst doesn't have x. Bug in use management code.");
 }

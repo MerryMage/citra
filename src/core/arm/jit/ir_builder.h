@@ -18,8 +18,8 @@ public:
 
     std::shared_ptr<MicroValue> GetGPR(ArmReg reg);
     std::shared_ptr<MicroValue> ConstU32(u32 value);
-    std::shared_ptr<MicroValue> Inst(MicroOp op, std::shared_ptr<MicroValue> a);
-    std::shared_ptr<MicroValue> Inst(MicroOp op, std::shared_ptr<MicroValue> a, std::shared_ptr<MicroValue> b);
+    std::shared_ptr<MicroValue> Inst(MicroOp op, std::shared_ptr<MicroValue> a, MicroArmFlags write_flags = MicroArmFlags::None);
+    std::shared_ptr<MicroValue> Inst(MicroOp op, std::shared_ptr<MicroValue> a, std::shared_ptr<MicroValue> b, MicroArmFlags write_flags = MicroArmFlags::None);
 
     static MicroTerminal TermLinkBlock(LocationDescriptor next);
     static MicroTerminal TermLinkBlockFast(LocationDescriptor next);

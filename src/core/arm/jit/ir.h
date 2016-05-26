@@ -32,9 +32,11 @@ namespace ArmJit {
 enum class MicroArmFlags;
 class MicroBlock;
 class MicroConstU32;
+class MicroGetGPR;
 class MicroInst;
 enum class MicroOp;
 struct MicroOpInfo;
+class MicroSetGPR;
 class MicroValue;
 
 // MicroTerminal declarations
@@ -60,8 +62,15 @@ namespace MicroTerm {
     /// This terminal instruction returns control to the dispatcher.
     struct ReturnToDispatch {};
 
-    using MicroTerminal = boost::variant <
+    /**
+     * This terminal instruction checks the top of the return stack buffer. If RSB return fails, control is returned to the dispatcher.
+     * This is an optimization for faster function calls; a backend may choose to implement this as ReturnToDispatch instead.
+     */
+    struct PopRSBHint {};
+
+    using MicroTerminal = boost::variant<
         ReturnToDispatch,
+        PopRSBHint,
         Interpret,
         LinkBlock,
         LinkBlockFast,
@@ -90,10 +99,12 @@ enum class MicroArmFlags {
     GE = 1 << 5,
 
     None = 0,
+    NZC = N | Z | C,
     NZCV = N | Z | C | V,
     Any = N | Z | C | V | Q | GE,
 };
 
+MicroArmFlags operator~(MicroArmFlags a);
 MicroArmFlags operator|(MicroArmFlags a, MicroArmFlags b);
 MicroArmFlags operator&(MicroArmFlags a, MicroArmFlags b);
 
@@ -105,8 +116,42 @@ enum class MicroType {
 /// The operation type of a microinstruction. These are suboperations
 /// of a ARM instruction.
 enum class MicroOp {
-    ConstU32,
-    GetGPR,
+    // Simple Values
+    ConstU32,          // value := const
+    GetGPR,            // value := R[reg]
+
+    // Cleanup
+    SetGPR,            // R[reg] := $0
+
+    // Hints
+    PushRSBHint,       // R[14] := $0, and pushes return info onto the return stack buffer [optimization].
+
+    // ARM PC
+    AluWritePC,        // R[15] := $0 & (APSR.T ? 0xFFFFFFFE : 0xFFFFFFFC) // ARMv6 behaviour
+    LoadWritePC,       // R[15] := $0 & 0xFFFFFFFE, APSR.T := $0 & 0x1     // ARMv6 behaviour (UNPREDICTABLE if $0 & 0x3 == 0)
+
+    // ARM ALU
+    Add,               // value := $0 + $1, writes ASPR.NZCV
+    AddWithCarry,      // value := $0 + $1 + APSR.C, writes ASPR.NZCV
+    Sub,               // value := $0 - $1, writes ASPR.NZCV
+
+    And,               // value := $0 & $1, writes ASPR.NZC
+    Eor,               // value := $0 ^ $1, writes ASPR.NZC
+    Not,               // value := ~$0
+
+    LSL,               // value := $0 LSL $1, writes ASPR.C
+    LSR,               // value := $0 LSR $1, writes ASPR.C
+    ASR,               // value := $0 ASR $1, writes ASPR.C
+    ROR,               // value := $0 ROR $1, writes ASPR.C
+    RRX,               // value := $0 RRX
+
+    CountLeadingZeros, // value := CLZ $0
+
+    // ARM Synchronisation
+    ClearExclusive,    // Clears exclusive access record
+
+    // Memory
+    Read32,            // value := Memory::Read32($0)
 };
 
 /// Information about an opcode.
@@ -123,7 +168,7 @@ MicroOpInfo GetMicroOpInfo(MicroOp op);
 /// Base-class for microinstructions to derive from.
 class MicroValue : protected std::enable_shared_from_this<MicroValue> {
 public:
-    virtual ~MicroValue() = 0;
+    virtual ~MicroValue() = default;
 
     bool HasUses() const { return !uses.empty(); }
     bool HasOneUse() const { return uses.size() == 1; }
@@ -145,6 +190,7 @@ public:
 
 protected:
     friend class MicroInst;
+    friend class MicroSetGPR;
 
     void AddUse(std::shared_ptr<MicroValue> owner);
     void RemoveUse(std::shared_ptr<MicroValue> owner);
@@ -172,7 +218,7 @@ public:
     const u32 value;
 };
 
-/// Representation of a u32 const load instruction.
+/// Representation of a GPR load instruction.
 class MicroGetGPR final : public MicroValue {
 public:
     explicit MicroGetGPR(ArmReg reg_) : reg(reg_) {}
@@ -182,6 +228,28 @@ public:
     MicroType GetType() const override { return MicroType::U32; }
 
     const ArmReg reg;
+};
+
+/// Representation of a GPR store instruction.
+class MicroSetGPR final : public MicroValue {
+public:
+    MicroSetGPR(ArmReg reg_, std::shared_ptr<MicroValue> arg_) : reg(reg_) {
+        SetArg(arg_);
+    }
+    ~MicroSetGPR() override = default;
+
+    MicroOp GetOp() const override { return MicroOp::SetGPR; }
+    MicroType GetType() const override { return MicroType::Void; }
+
+    /// Set argument number `index` to `value`.
+    void SetArg(std::shared_ptr<MicroValue> value);
+    /// Get argument number `index`.
+    std::shared_ptr<MicroValue> GetArg() const;
+
+    ArmReg reg;
+
+private:
+    std::weak_ptr<MicroValue> arg;
 };
 
 /// A representation of a microinstruction. A single ARM/Thumb
@@ -210,7 +278,7 @@ protected:
 
 private:
     MicroOp op;
-    std::vector<Use> args;
+    std::vector<std::weak_ptr<MicroValue>> args;
     MicroArmFlags write_flags;
 };
 

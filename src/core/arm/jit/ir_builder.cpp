@@ -1,29 +1,45 @@
+// Copyright 2016 Citra Emulator Project
+// Licensed under GPLv2 or any later version
+// Refer to the license.txt file included.
+
+#include "common/assert.h"
+
 #include "core/arm/jit/ir_builder.h"
 
 namespace ArmJit {
 
 std::shared_ptr<MicroValue> MicroBuilder::GetGPR(ArmReg reg) {
-    std::shared_ptr<MicroValue> ret = std::make_shared<MicroGetGPR>(reg);
-    block.instructions.emplace_back(ret);
-    return ret;
+    auto value = std::make_shared<MicroGetGPR>(reg);
+    block.instructions.emplace_back(value);
+    return value;
 }
 
-std::shared_ptr<ArmJit::MicroValue> MicroBuilder::ConstU32(u32 value) {
-    std::shared_ptr<MicroValue> ret = std::make_shared<MicroConstU32>(value);
-    block.instructions.emplace_back(ret);
-    return ret;
+std::shared_ptr<MicroValue> MicroBuilder::ConstU32(u32 u32_value) {
+    auto value = std::make_shared<MicroConstU32>(u32_value);
+    block.instructions.emplace_back(value);
+    return value;
 }
 
-std::shared_ptr<MicroValue> MicroBuilder::Inst(MicroOp op, std::shared_ptr<MicroValue> a) {
-    std::shared_ptr<MicroValue> ret = std::make_shared<MicroInst>(op, std::initializer_list<std::shared_ptr<MicroValue>>{a});
-    block.instructions.emplace_back(ret);
-    return ret;
+std::shared_ptr<MicroValue> MicroBuilder::Inst(MicroOp op, std::shared_ptr<MicroValue> a, MicroArmFlags write_flags) {
+    auto value = MicroInst::Build(op, { a });
+
+    // Ensure we aren't trying to write to any flags this instruction can never write.
+    ASSERT((write_flags & ~value->WriteFlags()) == MicroArmFlags::None);
+    value->SetWriteFlags(write_flags);
+
+    block.instructions.emplace_back(value);
+    return value;
 }
 
-std::shared_ptr<MicroValue> MicroBuilder::Inst(MicroOp op, std::shared_ptr<MicroValue> a, std::shared_ptr<MicroValue> b) {
-    std::shared_ptr<MicroValue> ret = std::make_shared<MicroInst>(op, std::initializer_list<std::shared_ptr<MicroValue>>{a, b});
-    block.instructions.emplace_back(ret);
-    return ret;
+std::shared_ptr<MicroValue> MicroBuilder::Inst(MicroOp op, std::shared_ptr<MicroValue> a, std::shared_ptr<MicroValue> b, MicroArmFlags write_flags) {
+    auto value = MicroInst::Build(op, { a, b });
+
+    // Ensure we aren't trying to write to any flags this instruction can never write.
+    ASSERT((write_flags & ~value->WriteFlags()) == MicroArmFlags::None);
+    value->SetWriteFlags(write_flags);
+
+    block.instructions.emplace_back(value);
+    return value;
 }
 
 MicroTerminal MicroBuilder::TermLinkBlock(LocationDescriptor next) {

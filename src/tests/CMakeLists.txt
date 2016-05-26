@@ -1,5 +1,6 @@
 set(SRCS
             tests.cpp
+            core/arm/jit/translator.cpp
             )
 
 set(HEADERS

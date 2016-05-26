@@ -36,10 +36,19 @@ public:
 
         ir.block.location = current;
 
-        do {
+        while (true) {
             TranslateSingleArmInstruction();
             instructions_translated++;
-        } while (!stop_compilation && ((current.arm_pc & 0xFFF) != 0));
+
+            if (stop_compilation)
+                break;
+            if ((current.arm_pc & 0xFFF) != 0)
+                break;
+        }
+
+        for (size_t i = 0; i < reg_values.size(); i++) {
+            // ir.SetGPR(static_cast<ArmReg>(i), arm_reg[i]);
+        }
 
         stop_compilation = true;
         return ir.block;
@@ -74,19 +83,32 @@ private:
             reg_values[reg_index] = ir.GetGPR(reg);
         return reg_values[reg_index];
     }
+    void SetReg(ArmReg reg, std::shared_ptr<MicroValue> value) {
+        size_t reg_index = static_cast<size_t>(reg);
+        reg_values[reg_index] = value;
+    }
 
     void FallbackToInterpreter() {
         ir.SetTerm(MicroBuilder::TermInterpret(current));
         stop_compilation = true;
     }
 
+    bool ConditionPassed(Cond cond) {
+        if (cond == current.cond)
+            return true;
+
+        ir.SetTerm(MicroBuilder::TermLinkBlock({current.arm_pc, current.TFlag, current.EFlag, cond}));
+        stop_compilation = true;
+        return false;
+    }
+
     // Branch instructions
     void B(Cond cond, ArmImm24 imm24) override;
     void BL(Cond cond, ArmImm24 imm24) override;
     void BLX_imm(bool H, ArmImm24 imm24) override;
-    void BLX_reg(Cond cond, ArmReg Rm) override;
-    void BX(Cond cond, ArmReg Rm) override;
-    void BXJ(Cond cond, ArmReg Rm) override;
+    void BLX_reg(Cond cond, ArmReg Rm_index) override;
+    void BX(Cond cond, ArmReg Rm_index) override;
+    void BXJ(Cond cond, ArmReg Rm_index) override;
 
     // Coprocessor instructions
     void CDP() override;
@@ -98,54 +120,54 @@ private:
     void STC() override;
 
     // Data processing instructions
-    void ADC_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) override;
-    void ADC_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void ADC_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) override;
-    void ADD_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) override;
-    void ADD_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void ADD_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) override;
-    void AND_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) override;
-    void AND_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void AND_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) override;
-    void BIC_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) override;
-    void BIC_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void BIC_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) override;
-    void CMN_imm(Cond cond,         ArmReg Rn,            int rotate, ArmImm8 imm8) override;
-    void CMN_reg(Cond cond,         ArmReg Rn,            ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void CMN_rsr(Cond cond,         ArmReg Rn,            ArmReg Rs, ShiftType shift, ArmReg Rm) override;
-    void CMP_imm(Cond cond,         ArmReg Rn,            int rotate, ArmImm8 imm8) override;
-    void CMP_reg(Cond cond,         ArmReg Rn,            ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void CMP_rsr(Cond cond,         ArmReg Rn,            ArmReg Rs, ShiftType shift, ArmReg Rm) override;
-    void EOR_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) override;
-    void EOR_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void EOR_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) override;
-    void MOV_imm(Cond cond, bool S,            ArmReg Rd, int rotate, ArmImm8 imm8) override;
-    void MOV_reg(Cond cond, bool S,            ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void MOV_rsr(Cond cond, bool S,            ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) override;
-    void MVN_imm(Cond cond, bool S,            ArmReg Rd, int rotate, ArmImm8 imm8) override;
-    void MVN_reg(Cond cond, bool S,            ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void MVN_rsr(Cond cond, bool S,            ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) override;
-    void ORR_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) override;
-    void ORR_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void ORR_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) override;
-    void RSB_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) override;
-    void RSB_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void RSB_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) override;
-    void RSC_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) override;
-    void RSC_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void RSC_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) override;
-    void SBC_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) override;
-    void SBC_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void SBC_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) override;
-    void SUB_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) override;
-    void SUB_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void SUB_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) override;
-    void TEQ_imm(Cond cond,         ArmReg Rn,            int rotate, ArmImm8 imm8) override;
-    void TEQ_reg(Cond cond,         ArmReg Rn,            ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void TEQ_rsr(Cond cond,         ArmReg Rn,            ArmReg Rs, ShiftType shift, ArmReg Rm) override;
-    void TST_imm(Cond cond,         ArmReg Rn,            int rotate, ArmImm8 imm8) override;
-    void TST_reg(Cond cond,         ArmReg Rn,            ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void TST_rsr(Cond cond,         ArmReg Rn,            ArmReg Rs, ShiftType shift, ArmReg Rm) override;
+    void ADC_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) override;
+    void ADC_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void ADC_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) override;
+    void ADD_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) override;
+    void ADD_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void ADD_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) override;
+    void AND_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) override;
+    void AND_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void AND_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) override;
+    void BIC_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) override;
+    void BIC_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void BIC_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) override;
+    void CMN_imm(Cond cond,         ArmReg Rn_index,            int rotate, ArmImm8 imm8) override;
+    void CMN_reg(Cond cond,         ArmReg Rn_index,            ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void CMN_rsr(Cond cond,         ArmReg Rn_index,            ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) override;
+    void CMP_imm(Cond cond,         ArmReg Rn_index,            int rotate, ArmImm8 imm8) override;
+    void CMP_reg(Cond cond,         ArmReg Rn_index,            ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void CMP_rsr(Cond cond,         ArmReg Rn_index,            ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) override;
+    void EOR_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) override;
+    void EOR_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void EOR_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) override;
+    void MOV_imm(Cond cond, bool S,            ArmReg Rd_index, int rotate, ArmImm8 imm8) override;
+    void MOV_reg(Cond cond, bool S,            ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void MOV_rsr(Cond cond, bool S,            ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) override;
+    void MVN_imm(Cond cond, bool S,            ArmReg Rd_index, int rotate, ArmImm8 imm8) override;
+    void MVN_reg(Cond cond, bool S,            ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void MVN_rsr(Cond cond, bool S,            ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) override;
+    void ORR_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) override;
+    void ORR_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void ORR_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) override;
+    void RSB_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) override;
+    void RSB_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void RSB_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) override;
+    void RSC_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) override;
+    void RSC_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void RSC_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) override;
+    void SBC_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) override;
+    void SBC_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void SBC_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) override;
+    void SUB_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) override;
+    void SUB_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void SUB_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) override;
+    void TEQ_imm(Cond cond,         ArmReg Rn_index,            int rotate, ArmImm8 imm8) override;
+    void TEQ_reg(Cond cond,         ArmReg Rn_index,            ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void TEQ_rsr(Cond cond,         ArmReg Rn_index,            ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) override;
+    void TST_imm(Cond cond,         ArmReg Rn_index,            int rotate, ArmImm8 imm8) override;
+    void TST_reg(Cond cond,         ArmReg Rn_index,            ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void TST_rsr(Cond cond,         ArmReg Rn_index,            ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) override;
 
     // Exception generation instructions
     void BKPT(Cond cond, ArmImm12 imm12, ArmImm4 imm4) override;
@@ -153,18 +175,18 @@ private:
     void UDF() override;
 
     // Extension functions
-    void SXTAB(Cond cond, ArmReg Rn, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) override;
-    void SXTAB16(Cond cond, ArmReg Rn, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) override;
-    void SXTAH(Cond cond, ArmReg Rn, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) override;
-    void SXTB(Cond cond, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) override;
-    void SXTB16(Cond cond, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) override;
-    void SXTH(Cond cond, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) override;
-    void UXTAB(Cond cond, ArmReg Rn, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) override;
-    void UXTAB16(Cond cond, ArmReg Rn, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) override;
-    void UXTAH(Cond cond, ArmReg Rn, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) override;
-    void UXTB(Cond cond, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) override;
-    void UXTB16(Cond cond, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) override;
-    void UXTH(Cond cond, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) override;
+    void SXTAB(Cond cond, ArmReg Rn_index, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) override;
+    void SXTAB16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) override;
+    void SXTAH(Cond cond, ArmReg Rn_index, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) override;
+    void SXTB(Cond cond, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) override;
+    void SXTB16(Cond cond, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) override;
+    void SXTH(Cond cond, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) override;
+    void UXTAB(Cond cond, ArmReg Rn_index, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) override;
+    void UXTAB16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) override;
+    void UXTAH(Cond cond, ArmReg Rn_index, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) override;
+    void UXTB(Cond cond, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) override;
+    void UXTB16(Cond cond, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) override;
+    void UXTH(Cond cond, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) override;
 
     // Hint instructions
     void PLD() override;
@@ -174,159 +196,159 @@ private:
     void YIELD() override;
 
     // Load/Store instructions
-    void LDR_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm11 imm11) override;
-    void LDR_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void LDRB_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm11 imm11) override;
-    void LDRB_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
+    void LDR_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm11 imm11) override;
+    void LDR_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void LDRB_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm11 imm11) override;
+    void LDRB_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
     void LDRBT() override;
-    void LDRD_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm4 imm8a, ArmImm4 imm8b) override;
-    void LDRD_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void LDRH_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm4 imm8a, ArmImm4 imm8b) override;
-    void LDRH_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
+    void LDRD_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm4 imm8a, ArmImm4 imm8b) override;
+    void LDRD_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void LDRH_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm4 imm8a, ArmImm4 imm8b) override;
+    void LDRH_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
     void LDRHT() override;
-    void LDRSB_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm4 imm8a, ArmImm4 imm8b) override;
-    void LDRSB_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
+    void LDRSB_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm4 imm8a, ArmImm4 imm8b) override;
+    void LDRSB_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
     void LDRSBT() override;
-    void LDRSH_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm4 imm8a, ArmImm4 imm8b) override;
-    void LDRSH_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
+    void LDRSH_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm4 imm8a, ArmImm4 imm8b) override;
+    void LDRSH_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
     void LDRSHT() override;
     void LDRT() override;
-    void STR_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm11 imm11) override;
-    void STR_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
-    void STRB_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm11 imm11) override;
-    void STRB_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) override;
+    void STR_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm11 imm11) override;
+    void STR_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
+    void STRB_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm11 imm11) override;
+    void STRB_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) override;
     void STRBT() override;
-    void STRD_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm4 imm8a, ArmImm4 imm8b) override;
-    void STRD_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void STRH_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm4 imm8a, ArmImm4 imm8b) override;
-    void STRH_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
+    void STRD_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm4 imm8a, ArmImm4 imm8b) override;
+    void STRD_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void STRH_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm4 imm8a, ArmImm4 imm8b) override;
+    void STRH_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
     void STRHT() override;
     void STRT() override;
 
     // Load/Store multiple instructions
-    void LDM(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmRegList list) override;
+    void LDM(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmRegList list) override;
     void LDM_usr() override;
     void LDM_eret() override;
-    void STM(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmRegList list) override;
+    void STM(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmRegList list) override;
     void STM_usr() override;
 
     // Miscellaneous instructions
-    void CLZ(Cond cond, ArmReg Rd, ArmReg Rm) override;
+    void CLZ(Cond cond, ArmReg Rd_index, ArmReg Rm_index) override;
     void NOP() override;
-    void SEL(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
+    void SEL(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
 
     // Unsigned sum of absolute difference functions
-    void USAD8(Cond cond, ArmReg Rd, ArmReg Rm, ArmReg Rn) override;
-    void USADA8(Cond cond, ArmReg Rd, ArmReg Ra, ArmReg Rm, ArmReg Rn) override;
+    void USAD8(Cond cond, ArmReg Rd_index, ArmReg Rm_index, ArmReg Rn_index) override;
+    void USADA8(Cond cond, ArmReg Rd_index, ArmReg Ra, ArmReg Rm_index, ArmReg Rn_index) override;
 
     // Packing instructions
-    void PKHBT(Cond cond, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ArmReg Rm) override;
-    void PKHTB(Cond cond, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ArmReg Rm) override;
+    void PKHBT(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ArmReg Rm_index) override;
+    void PKHTB(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ArmReg Rm_index) override;
 
     // Reversal instructions
-    void REV(Cond cond, ArmReg Rd, ArmReg Rm) override;
-    void REV16(Cond cond, ArmReg Rd, ArmReg Rm) override;
-    void REVSH(Cond cond, ArmReg Rd, ArmReg Rm) override;
+    void REV(Cond cond, ArmReg Rd_index, ArmReg Rm_index) override;
+    void REV16(Cond cond, ArmReg Rd_index, ArmReg Rm_index) override;
+    void REVSH(Cond cond, ArmReg Rd_index, ArmReg Rm_index) override;
 
     // Saturation instructions
-    void SSAT(Cond cond, ArmImm5 sat_imm, ArmReg Rd, ArmImm5 imm5, bool sh, ArmReg Rn) override;
-    void SSAT16(Cond cond, ArmImm4 sat_imm, ArmReg Rd, ArmReg Rn) override;
-    void USAT(Cond cond, ArmImm5 sat_imm, ArmReg Rd, ArmImm5 imm5, bool sh, ArmReg Rn) override;
-    void USAT16(Cond cond, ArmImm4 sat_imm, ArmReg Rd, ArmReg Rn) override;
+    void SSAT(Cond cond, ArmImm5 sat_imm, ArmReg Rd_index, ArmImm5 imm5, bool sh, ArmReg Rn_index) override;
+    void SSAT16(Cond cond, ArmImm4 sat_imm, ArmReg Rd_index, ArmReg Rn_index) override;
+    void USAT(Cond cond, ArmImm5 sat_imm, ArmReg Rd_index, ArmImm5 imm5, bool sh, ArmReg Rn_index) override;
+    void USAT16(Cond cond, ArmImm4 sat_imm, ArmReg Rd_index, ArmReg Rn_index) override;
 
     // Multiply (Normal) instructions
-    void MLA(Cond cond, bool S, ArmReg Rd, ArmReg Ra, ArmReg Rm, ArmReg Rn) override;
-    void MUL(Cond cond, bool S, ArmReg Rd, ArmReg Rm, ArmReg Rn) override;
+    void MLA(Cond cond, bool S, ArmReg Rd_index, ArmReg Ra, ArmReg Rm_index, ArmReg Rn_index) override;
+    void MUL(Cond cond, bool S, ArmReg Rd_index, ArmReg Rm_index, ArmReg Rn_index) override;
 
     // Multiply (Long) instructions
-    void SMLAL(Cond cond, bool S, ArmReg RdHi, ArmReg RdLo, ArmReg Rm, ArmReg Rn) override;
-    void SMULL(Cond cond, bool S, ArmReg RdHi, ArmReg RdLo, ArmReg Rm, ArmReg Rn) override;
-    void UMAAL(Cond cond, ArmReg RdHi, ArmReg RdLo, ArmReg Rm, ArmReg Rn) override;
-    void UMLAL(Cond cond, bool S, ArmReg RdHi, ArmReg RdLo, ArmReg Rm, ArmReg Rn) override;
-    void UMULL(Cond cond, bool S, ArmReg RdHi, ArmReg RdLo, ArmReg Rm, ArmReg Rn) override;
+    void SMLAL(Cond cond, bool S, ArmReg Rd_indexHi, ArmReg Rd_indexLo, ArmReg Rm_index, ArmReg Rn_index) override;
+    void SMULL(Cond cond, bool S, ArmReg Rd_indexHi, ArmReg Rd_indexLo, ArmReg Rm_index, ArmReg Rn_index) override;
+    void UMAAL(Cond cond, ArmReg Rd_indexHi, ArmReg Rd_indexLo, ArmReg Rm_index, ArmReg Rn_index) override;
+    void UMLAL(Cond cond, bool S, ArmReg Rd_indexHi, ArmReg Rd_indexLo, ArmReg Rm_index, ArmReg Rn_index) override;
+    void UMULL(Cond cond, bool S, ArmReg Rd_indexHi, ArmReg Rd_indexLo, ArmReg Rm_index, ArmReg Rn_index) override;
 
     // Multiply (Halfword) instructions
-    void SMLALxy(Cond cond, ArmReg RdHi, ArmReg RdLo, ArmReg Rm, bool M, bool N, ArmReg Rn) override;
-    void SMLAxy(Cond cond, ArmReg Rd, ArmReg Ra, ArmReg Rm, bool M, bool N, ArmReg Rn) override;
-    void SMULxy(Cond cond, ArmReg Rd, ArmReg Rm, bool M, bool N, ArmReg Rn) override;
+    void SMLALxy(Cond cond, ArmReg Rd_indexHi, ArmReg Rd_indexLo, ArmReg Rm_index, bool M, bool N, ArmReg Rn_index) override;
+    void SMLAxy(Cond cond, ArmReg Rd_index, ArmReg Ra, ArmReg Rm_index, bool M, bool N, ArmReg Rn_index) override;
+    void SMULxy(Cond cond, ArmReg Rd_index, ArmReg Rm_index, bool M, bool N, ArmReg Rn_index) override;
 
     // Multiply (word by halfword) instructions
-    void SMLAWy(Cond cond, ArmReg Rd, ArmReg Ra, ArmReg Rm, bool M, ArmReg Rn) override;
-    void SMULWy(Cond cond, ArmReg Rd, ArmReg Rm, bool M, ArmReg Rn) override;
+    void SMLAWy(Cond cond, ArmReg Rd_index, ArmReg Ra, ArmReg Rm_index, bool M, ArmReg Rn_index) override;
+    void SMULWy(Cond cond, ArmReg Rd_index, ArmReg Rm_index, bool M, ArmReg Rn_index) override;
 
     // Multiply (Most significant word) instructions
-    void SMMLA(Cond cond, ArmReg Rd, ArmReg Ra, ArmReg Rm, bool R, ArmReg Rn) override;
-    void SMMLS(Cond cond, ArmReg Rd, ArmReg Ra, ArmReg Rm, bool R, ArmReg Rn) override;
-    void SMMUL(Cond cond, ArmReg Rd, ArmReg Rm, bool R, ArmReg Rn) override;
+    void SMMLA(Cond cond, ArmReg Rd_index, ArmReg Ra, ArmReg Rm_index, bool R, ArmReg Rn_index) override;
+    void SMMLS(Cond cond, ArmReg Rd_index, ArmReg Ra, ArmReg Rm_index, bool R, ArmReg Rn_index) override;
+    void SMMUL(Cond cond, ArmReg Rd_index, ArmReg Rm_index, bool R, ArmReg Rn_index) override;
 
     // Multiply (Dual) instructions
-    void SMLAD(Cond cond, ArmReg Rd, ArmReg Ra, ArmReg Rm, bool M, ArmReg Rn) override;
-    void SMLALD(Cond cond, ArmReg RdHi, ArmReg RdLo, ArmReg Rm, bool M, ArmReg Rn) override;
-    void SMLSD(Cond cond, ArmReg Rd, ArmReg Ra, ArmReg Rm, bool M, ArmReg Rn) override;
-    void SMLSLD(Cond cond, ArmReg RdHi, ArmReg RdLo, ArmReg Rm, bool M, ArmReg Rn) override;
-    void SMUAD(Cond cond, ArmReg Rd, ArmReg Rm, bool M, ArmReg Rn) override;
-    void SMUSD(Cond cond, ArmReg Rd, ArmReg Rm, bool M, ArmReg Rn) override;
+    void SMLAD(Cond cond, ArmReg Rd_index, ArmReg Ra, ArmReg Rm_index, bool M, ArmReg Rn_index) override;
+    void SMLALD(Cond cond, ArmReg Rd_indexHi, ArmReg Rd_indexLo, ArmReg Rm_index, bool M, ArmReg Rn_index) override;
+    void SMLSD(Cond cond, ArmReg Rd_index, ArmReg Ra, ArmReg Rm_index, bool M, ArmReg Rn_index) override;
+    void SMLSLD(Cond cond, ArmReg Rd_indexHi, ArmReg Rd_indexLo, ArmReg Rm_index, bool M, ArmReg Rn_index) override;
+    void SMUAD(Cond cond, ArmReg Rd_index, ArmReg Rm_index, bool M, ArmReg Rn_index) override;
+    void SMUSD(Cond cond, ArmReg Rd_index, ArmReg Rm_index, bool M, ArmReg Rn_index) override;
 
     // Parallel Add/Subtract (Modulo arithmetic) instructions
-    void SADD8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void SADD16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void SASX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void SSAX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void SSUB8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void SSUB16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void UADD8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void UADD16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void UASX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void USAX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void USUB8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void USUB16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
+    void SADD8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void SADD16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void SASX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void SSAX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void SSUB8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void SSUB16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void UADD8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void UADD16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void UASX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void USAX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void USUB8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void USUB16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
 
     // Parallel Add/Subtract (Saturating) instructions
-    void QADD8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void QADD16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void QASX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void QSAX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void QSUB8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void QSUB16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void UQADD8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void UQADD16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void UQASX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void UQSAX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void UQSUB8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void UQSUB16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
+    void QADD8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void QADD16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void QASX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void QSAX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void QSUB8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void QSUB16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void UQADD8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void UQADD16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void UQASX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void UQSAX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void UQSUB8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void UQSUB16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
 
     // Parallel Add/Subtract (Halving) instructions
-    void SHADD8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void SHADD16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void SHASX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void SHSAX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void SHSUB8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void SHSUB16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void UHADD8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void UHADD16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void UHASX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void UHSAX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void UHSUB8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void UHSUB16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
+    void SHADD8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void SHADD16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void SHASX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void SHSAX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void SHSUB8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void SHSUB16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void UHADD8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void UHADD16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void UHASX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void UHSAX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void UHSUB8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void UHSUB16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
 
     // Saturated Add/Subtract instructions
-    void QADD(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void QSUB(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void QDADD(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void QDSUB(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
+    void QADD(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void QSUB(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void QDADD(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void QDSUB(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
 
     // Synchronization Primitive instructions
     void CLREX() override;
-    void LDREX(Cond cond, ArmReg Rn, ArmReg Rd) override;
-    void LDREXB(Cond cond, ArmReg Rn, ArmReg Rd) override;
-    void LDREXD(Cond cond, ArmReg Rn, ArmReg Rd) override;
-    void LDREXH(Cond cond, ArmReg Rn, ArmReg Rd) override;
-    void STREX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void STREXB(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void STREXD(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void STREXH(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void SWP(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
-    void SWPB(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) override;
+    void LDREX(Cond cond, ArmReg Rn_index, ArmReg Rd_index) override;
+    void LDREXB(Cond cond, ArmReg Rn_index, ArmReg Rd_index) override;
+    void LDREXD(Cond cond, ArmReg Rn_index, ArmReg Rd_index) override;
+    void LDREXH(Cond cond, ArmReg Rn_index, ArmReg Rd_index) override;
+    void STREX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void STREXB(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void STREXD(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void STREXH(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void SWP(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
+    void SWPB(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) override;
 
     // Status register access instructions
     void CPS() override;
@@ -349,12 +371,21 @@ MicroBlock Translate(const LocationDescriptor& location) {
 }
 
 // Branch instructions
-void ArmTranslator::B(Cond cond, ArmImm24 imm24) { FallbackToInterpreter(); }
+void ArmTranslator::B(Cond cond, ArmImm24 imm24) {
+    // TODO: Handle cond, dude.
+
+    auto next = current;
+    next.arm_pc += imm24; // TODO: Sign extend this.
+
+    ir.SetTerm(MicroBuilder::TermLinkBlock(next));
+    stop_compilation = true;
+}
+
 void ArmTranslator::BL(Cond cond, ArmImm24 imm24) { FallbackToInterpreter(); }
 void ArmTranslator::BLX_imm(bool H, ArmImm24 imm24) { FallbackToInterpreter(); }
-void ArmTranslator::BLX_reg(Cond cond, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::BX(Cond cond, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::BXJ(Cond cond, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::BLX_reg(Cond cond, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::BX(Cond cond, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::BXJ(Cond cond, ArmReg Rm_index) { FallbackToInterpreter(); }
 
 // Coprocessor instructions
 void ArmTranslator::CDP() { FallbackToInterpreter(); }
@@ -366,54 +397,76 @@ void ArmTranslator::MRRC() { FallbackToInterpreter(); }
 void ArmTranslator::STC() { FallbackToInterpreter(); }
 
 // Data processing instructions
-void ArmTranslator::ADC_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
-void ArmTranslator::ADC_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::ADC_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::ADD_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
-void ArmTranslator::ADD_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::ADD_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::AND_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
-void ArmTranslator::AND_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::AND_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::BIC_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
-void ArmTranslator::BIC_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::BIC_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::CMN_imm(Cond cond,         ArmReg Rn,            int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
-void ArmTranslator::CMN_reg(Cond cond,         ArmReg Rn,            ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::CMN_rsr(Cond cond,         ArmReg Rn,            ArmReg Rs, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::CMP_imm(Cond cond,         ArmReg Rn,            int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
-void ArmTranslator::CMP_reg(Cond cond,         ArmReg Rn,            ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::CMP_rsr(Cond cond,         ArmReg Rn,            ArmReg Rs, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::EOR_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
-void ArmTranslator::EOR_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::EOR_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::MOV_imm(Cond cond, bool S,            ArmReg Rd, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
-void ArmTranslator::MOV_reg(Cond cond, bool S,            ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::MOV_rsr(Cond cond, bool S,            ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::MVN_imm(Cond cond, bool S,            ArmReg Rd, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
-void ArmTranslator::MVN_reg(Cond cond, bool S,            ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::MVN_rsr(Cond cond, bool S,            ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::ORR_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
-void ArmTranslator::ORR_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::ORR_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::RSB_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
-void ArmTranslator::RSB_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::RSB_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::RSC_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
-void ArmTranslator::RSC_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::RSC_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SBC_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
-void ArmTranslator::SBC_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SBC_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SUB_imm(Cond cond, bool S, ArmReg Rn, ArmReg Rd, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
-void ArmTranslator::SUB_reg(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SUB_rsr(Cond cond, bool S, ArmReg Rn, ArmReg Rd, ArmReg Rs, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::TEQ_imm(Cond cond,         ArmReg Rn,            int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
-void ArmTranslator::TEQ_reg(Cond cond,         ArmReg Rn,            ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::TEQ_rsr(Cond cond,         ArmReg Rn,            ArmReg Rs, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::TST_imm(Cond cond,         ArmReg Rn,            int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
-void ArmTranslator::TST_reg(Cond cond,         ArmReg Rn,            ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::TST_rsr(Cond cond,         ArmReg Rn,            ArmReg Rs, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::ADC_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
+void ArmTranslator::ADC_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::ADC_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+
+void ArmTranslator::ADD_imm(Cond cond, bool S, ArmReg n, ArmReg d, int rotate, ArmImm8 imm8) {
+    // Decode
+    u32 expanded_imm = ArmExpandImm(imm8, rotate);
+    MicroArmFlags set_flags = S ? MicroArmFlags::NZCV : MicroArmFlags::None;
+
+    // "Execute"
+    if (ConditionPassed(cond)) {
+        auto Rn = GetReg(n);
+        auto imm32 = ir.ConstU32(expanded_imm);
+
+        auto result = ir.Inst(MicroOp::Add, Rn, imm32, set_flags);
+
+        if (d == ArmReg::PC) {
+            ALUWritePC(result);
+        } else {
+            SetReg(d, result);
+        }
+    }
+
+    current.arm_pc += 4;
+}
+
+void ArmTranslator::ADD_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::ADD_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::AND_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
+void ArmTranslator::AND_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::AND_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::BIC_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
+void ArmTranslator::BIC_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::BIC_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::CMN_imm(Cond cond,         ArmReg Rn_index,            int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
+void ArmTranslator::CMN_reg(Cond cond,         ArmReg Rn_index,            ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::CMN_rsr(Cond cond,         ArmReg Rn_index,            ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::CMP_imm(Cond cond,         ArmReg Rn_index,            int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
+void ArmTranslator::CMP_reg(Cond cond,         ArmReg Rn_index,            ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::CMP_rsr(Cond cond,         ArmReg Rn_index,            ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::EOR_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
+void ArmTranslator::EOR_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::EOR_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::MOV_imm(Cond cond, bool S,            ArmReg Rd_index, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
+void ArmTranslator::MOV_reg(Cond cond, bool S,            ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::MOV_rsr(Cond cond, bool S,            ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::MVN_imm(Cond cond, bool S,            ArmReg Rd_index, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
+void ArmTranslator::MVN_reg(Cond cond, bool S,            ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::MVN_rsr(Cond cond, bool S,            ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::ORR_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
+void ArmTranslator::ORR_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::ORR_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::RSB_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
+void ArmTranslator::RSB_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::RSB_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::RSC_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
+void ArmTranslator::RSC_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::RSC_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SBC_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
+void ArmTranslator::SBC_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SBC_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SUB_imm(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
+void ArmTranslator::SUB_reg(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SUB_rsr(Cond cond, bool S, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::TEQ_imm(Cond cond,         ArmReg Rn_index,            int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
+void ArmTranslator::TEQ_reg(Cond cond,         ArmReg Rn_index,            ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::TEQ_rsr(Cond cond,         ArmReg Rn_index,            ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::TST_imm(Cond cond,         ArmReg Rn_index,            int rotate, ArmImm8 imm8) { FallbackToInterpreter(); }
+void ArmTranslator::TST_reg(Cond cond,         ArmReg Rn_index,            ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::TST_rsr(Cond cond,         ArmReg Rn_index,            ArmReg Rs_index, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
 
 // Exception generation instructions
 void ArmTranslator::BKPT(Cond cond, ArmImm12 imm12, ArmImm4 imm4) { FallbackToInterpreter(); }
@@ -421,18 +474,18 @@ void ArmTranslator::SVC(Cond cond, ArmImm24 imm24) { FallbackToInterpreter(); }
 void ArmTranslator::UDF() { FallbackToInterpreter(); }
 
 // Extension functions
-void ArmTranslator::SXTAB(Cond cond, ArmReg Rn, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SXTAB16(Cond cond, ArmReg Rn, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SXTAH(Cond cond, ArmReg Rn, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SXTB(Cond cond, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SXTB16(Cond cond, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SXTH(Cond cond, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UXTAB(Cond cond, ArmReg Rn, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UXTAB16(Cond cond, ArmReg Rn, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UXTAH(Cond cond, ArmReg Rn, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UXTB(Cond cond, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UXTB16(Cond cond, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UXTH(Cond cond, ArmReg Rd, SignExtendRotation rotate, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::SXTAB(Cond cond, ArmReg Rn_index, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SXTAB16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SXTAH(Cond cond, ArmReg Rn_index, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SXTB(Cond cond, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SXTB16(Cond cond, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SXTH(Cond cond, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UXTAB(Cond cond, ArmReg Rn_index, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UXTAB16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UXTAH(Cond cond, ArmReg Rn_index, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UXTB(Cond cond, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UXTB16(Cond cond, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UXTH(Cond cond, ArmReg Rd_index, SignExtendRotation rotate, ArmReg Rm_index) { FallbackToInterpreter(); }
 
 // Hint instructions
 void ArmTranslator::PLD() { FallbackToInterpreter(); }
@@ -442,159 +495,159 @@ void ArmTranslator::WFI() { FallbackToInterpreter(); }
 void ArmTranslator::YIELD() { FallbackToInterpreter(); }
 
 // Load/Store instructions
-void ArmTranslator::LDR_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm11 imm11) { FallbackToInterpreter(); }
-void ArmTranslator::LDR_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::LDRB_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm11 imm11) { FallbackToInterpreter(); }
-void ArmTranslator::LDRB_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::LDR_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm11 imm11) { FallbackToInterpreter(); }
+void ArmTranslator::LDR_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::LDRB_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm11 imm11) { FallbackToInterpreter(); }
+void ArmTranslator::LDRB_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
 void ArmTranslator::LDRBT() { FallbackToInterpreter(); }
-void ArmTranslator::LDRD_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm4 imm8a, ArmImm4 imm8b) { FallbackToInterpreter(); }
-void ArmTranslator::LDRD_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::LDRH_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm4 imm8a, ArmImm4 imm8b) { FallbackToInterpreter(); }
-void ArmTranslator::LDRH_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::LDRD_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm4 imm8a, ArmImm4 imm8b) { FallbackToInterpreter(); }
+void ArmTranslator::LDRD_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::LDRH_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm4 imm8a, ArmImm4 imm8b) { FallbackToInterpreter(); }
+void ArmTranslator::LDRH_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
 void ArmTranslator::LDRHT() { FallbackToInterpreter(); }
-void ArmTranslator::LDRSB_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm4 imm8a, ArmImm4 imm8b) { FallbackToInterpreter(); }
-void ArmTranslator::LDRSB_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::LDRSB_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm4 imm8a, ArmImm4 imm8b) { FallbackToInterpreter(); }
+void ArmTranslator::LDRSB_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
 void ArmTranslator::LDRSBT() { FallbackToInterpreter(); }
-void ArmTranslator::LDRSH_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm4 imm8a, ArmImm4 imm8b) { FallbackToInterpreter(); }
-void ArmTranslator::LDRSH_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::LDRSH_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm4 imm8a, ArmImm4 imm8b) { FallbackToInterpreter(); }
+void ArmTranslator::LDRSH_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
 void ArmTranslator::LDRSHT() { FallbackToInterpreter(); }
 void ArmTranslator::LDRT() { FallbackToInterpreter(); }
-void ArmTranslator::STR_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm11 imm11) { FallbackToInterpreter(); }
-void ArmTranslator::STR_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::STRB_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm11 imm11) { FallbackToInterpreter(); }
-void ArmTranslator::STRB_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ShiftType shift, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::STR_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm11 imm11) { FallbackToInterpreter(); }
+void ArmTranslator::STR_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::STRB_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm11 imm11) { FallbackToInterpreter(); }
+void ArmTranslator::STRB_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ShiftType shift, ArmReg Rm_index) { FallbackToInterpreter(); }
 void ArmTranslator::STRBT() { FallbackToInterpreter(); }
-void ArmTranslator::STRD_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm4 imm8a, ArmImm4 imm8b) { FallbackToInterpreter(); }
-void ArmTranslator::STRD_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::STRH_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmImm4 imm8a, ArmImm4 imm8b) { FallbackToInterpreter(); }
-void ArmTranslator::STRH_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::STRD_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm4 imm8a, ArmImm4 imm8b) { FallbackToInterpreter(); }
+void ArmTranslator::STRD_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::STRH_imm(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmImm4 imm8a, ArmImm4 imm8b) { FallbackToInterpreter(); }
+void ArmTranslator::STRH_reg(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
 void ArmTranslator::STRHT() { FallbackToInterpreter(); }
 void ArmTranslator::STRT() { FallbackToInterpreter(); }
 
 // Load/Store multiple instructions
-void ArmTranslator::LDM(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmRegList list) { FallbackToInterpreter(); }
+void ArmTranslator::LDM(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmRegList list) { FallbackToInterpreter(); }
 void ArmTranslator::LDM_usr() { FallbackToInterpreter(); }
 void ArmTranslator::LDM_eret() { FallbackToInterpreter(); }
-void ArmTranslator::STM(Cond cond, bool P, bool U, bool W, ArmReg Rn, ArmRegList list) { FallbackToInterpreter(); }
+void ArmTranslator::STM(Cond cond, bool P, bool U, bool W, ArmReg Rn_index, ArmRegList list) { FallbackToInterpreter(); }
 void ArmTranslator::STM_usr() { FallbackToInterpreter(); }
 
 // Miscellaneous instructions
-void ArmTranslator::CLZ(Cond cond, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::CLZ(Cond cond, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
 void ArmTranslator::NOP() { FallbackToInterpreter(); }
-void ArmTranslator::SEL(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::SEL(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
 
 // Unsigned sum of absolute difference functions
-void ArmTranslator::USAD8(Cond cond, ArmReg Rd, ArmReg Rm, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::USADA8(Cond cond, ArmReg Rd, ArmReg Ra, ArmReg Rm, ArmReg Rn) { FallbackToInterpreter(); }
+void ArmTranslator::USAD8(Cond cond, ArmReg Rd_index, ArmReg Rm_index, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::USADA8(Cond cond, ArmReg Rd_index, ArmReg Ra, ArmReg Rm_index, ArmReg Rn_index) { FallbackToInterpreter(); }
 
 // Packing instructions
-void ArmTranslator::PKHBT(Cond cond, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::PKHTB(Cond cond, ArmReg Rn, ArmReg Rd, ArmImm5 imm5, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::PKHBT(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::PKHTB(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmImm5 imm5, ArmReg Rm_index) { FallbackToInterpreter(); }
 
 // Reversal instructions
-void ArmTranslator::REV(Cond cond, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::REV16(Cond cond, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::REVSH(Cond cond, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::REV(Cond cond, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::REV16(Cond cond, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::REVSH(Cond cond, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
 
 // Saturation instructions
-void ArmTranslator::SSAT(Cond cond, ArmImm5 sat_imm, ArmReg Rd, ArmImm5 imm5, bool sh, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::SSAT16(Cond cond, ArmImm4 sat_imm, ArmReg Rd, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::USAT(Cond cond, ArmImm5 sat_imm, ArmReg Rd, ArmImm5 imm5, bool sh, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::USAT16(Cond cond, ArmImm4 sat_imm, ArmReg Rd, ArmReg Rn) { FallbackToInterpreter(); }
+void ArmTranslator::SSAT(Cond cond, ArmImm5 sat_imm, ArmReg Rd_index, ArmImm5 imm5, bool sh, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::SSAT16(Cond cond, ArmImm4 sat_imm, ArmReg Rd_index, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::USAT(Cond cond, ArmImm5 sat_imm, ArmReg Rd_index, ArmImm5 imm5, bool sh, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::USAT16(Cond cond, ArmImm4 sat_imm, ArmReg Rd_index, ArmReg Rn_index) { FallbackToInterpreter(); }
 
 // Multiply (Normal) instructions
-void ArmTranslator::MLA(Cond cond, bool S, ArmReg Rd, ArmReg Ra, ArmReg Rm, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::MUL(Cond cond, bool S, ArmReg Rd, ArmReg Rm, ArmReg Rn) { FallbackToInterpreter(); }
+void ArmTranslator::MLA(Cond cond, bool S, ArmReg Rd_index, ArmReg Ra, ArmReg Rm_index, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::MUL(Cond cond, bool S, ArmReg Rd_index, ArmReg Rm_index, ArmReg Rn_index) { FallbackToInterpreter(); }
 
 // Multiply (Long) instructions
-void ArmTranslator::SMLAL(Cond cond, bool S, ArmReg RdHi, ArmReg RdLo, ArmReg Rm, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::SMULL(Cond cond, bool S, ArmReg RdHi, ArmReg RdLo, ArmReg Rm, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::UMAAL(Cond cond, ArmReg RdHi, ArmReg RdLo, ArmReg Rm, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::UMLAL(Cond cond, bool S, ArmReg RdHi, ArmReg RdLo, ArmReg Rm, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::UMULL(Cond cond, bool S, ArmReg RdHi, ArmReg RdLo, ArmReg Rm, ArmReg Rn) { FallbackToInterpreter(); }
+void ArmTranslator::SMLAL(Cond cond, bool S, ArmReg Rd_indexHi, ArmReg Rd_indexLo, ArmReg Rm_index, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::SMULL(Cond cond, bool S, ArmReg Rd_indexHi, ArmReg Rd_indexLo, ArmReg Rm_index, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::UMAAL(Cond cond, ArmReg Rd_indexHi, ArmReg Rd_indexLo, ArmReg Rm_index, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::UMLAL(Cond cond, bool S, ArmReg Rd_indexHi, ArmReg Rd_indexLo, ArmReg Rm_index, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::UMULL(Cond cond, bool S, ArmReg Rd_indexHi, ArmReg Rd_indexLo, ArmReg Rm_index, ArmReg Rn_index) { FallbackToInterpreter(); }
 
 // Multiply (Halfword) instructions
-void ArmTranslator::SMLALxy(Cond cond, ArmReg RdHi, ArmReg RdLo, ArmReg Rm, bool M, bool N, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::SMLAxy(Cond cond, ArmReg Rd, ArmReg Ra, ArmReg Rm, bool M, bool N, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::SMULxy(Cond cond, ArmReg Rd, ArmReg Rm, bool M, bool N, ArmReg Rn) { FallbackToInterpreter(); }
+void ArmTranslator::SMLALxy(Cond cond, ArmReg Rd_indexHi, ArmReg Rd_indexLo, ArmReg Rm_index, bool M, bool N, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::SMLAxy(Cond cond, ArmReg Rd_index, ArmReg Ra, ArmReg Rm_index, bool M, bool N, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::SMULxy(Cond cond, ArmReg Rd_index, ArmReg Rm_index, bool M, bool N, ArmReg Rn_index) { FallbackToInterpreter(); }
 
 // Multiply (word by halfword) instructions
-void ArmTranslator::SMLAWy(Cond cond, ArmReg Rd, ArmReg Ra, ArmReg Rm, bool M, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::SMULWy(Cond cond, ArmReg Rd, ArmReg Rm, bool M, ArmReg Rn) { FallbackToInterpreter(); }
+void ArmTranslator::SMLAWy(Cond cond, ArmReg Rd_index, ArmReg Ra, ArmReg Rm_index, bool M, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::SMULWy(Cond cond, ArmReg Rd_index, ArmReg Rm_index, bool M, ArmReg Rn_index) { FallbackToInterpreter(); }
 
 // Multiply (Most significant word) instructions
-void ArmTranslator::SMMLA(Cond cond, ArmReg Rd, ArmReg Ra, ArmReg Rm, bool R, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::SMMLS(Cond cond, ArmReg Rd, ArmReg Ra, ArmReg Rm, bool R, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::SMMUL(Cond cond, ArmReg Rd, ArmReg Rm, bool R, ArmReg Rn) { FallbackToInterpreter(); }
+void ArmTranslator::SMMLA(Cond cond, ArmReg Rd_index, ArmReg Ra, ArmReg Rm_index, bool R, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::SMMLS(Cond cond, ArmReg Rd_index, ArmReg Ra, ArmReg Rm_index, bool R, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::SMMUL(Cond cond, ArmReg Rd_index, ArmReg Rm_index, bool R, ArmReg Rn_index) { FallbackToInterpreter(); }
 
 // Multiply (Dual) instructions
-void ArmTranslator::SMLAD(Cond cond, ArmReg Rd, ArmReg Ra, ArmReg Rm, bool M, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::SMLALD(Cond cond, ArmReg RdHi, ArmReg RdLo, ArmReg Rm, bool M, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::SMLSD(Cond cond, ArmReg Rd, ArmReg Ra, ArmReg Rm, bool M, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::SMLSLD(Cond cond, ArmReg RdHi, ArmReg RdLo, ArmReg Rm, bool M, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::SMUAD(Cond cond, ArmReg Rd, ArmReg Rm, bool M, ArmReg Rn) { FallbackToInterpreter(); }
-void ArmTranslator::SMUSD(Cond cond, ArmReg Rd, ArmReg Rm, bool M, ArmReg Rn) { FallbackToInterpreter(); }
+void ArmTranslator::SMLAD(Cond cond, ArmReg Rd_index, ArmReg Ra, ArmReg Rm_index, bool M, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::SMLALD(Cond cond, ArmReg Rd_indexHi, ArmReg Rd_indexLo, ArmReg Rm_index, bool M, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::SMLSD(Cond cond, ArmReg Rd_index, ArmReg Ra, ArmReg Rm_index, bool M, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::SMLSLD(Cond cond, ArmReg Rd_indexHi, ArmReg Rd_indexLo, ArmReg Rm_index, bool M, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::SMUAD(Cond cond, ArmReg Rd_index, ArmReg Rm_index, bool M, ArmReg Rn_index) { FallbackToInterpreter(); }
+void ArmTranslator::SMUSD(Cond cond, ArmReg Rd_index, ArmReg Rm_index, bool M, ArmReg Rn_index) { FallbackToInterpreter(); }
 
 // Parallel Add/Subtract (Modulo arithmetic) instructions
-void ArmTranslator::SADD8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SADD16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SASX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SSAX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SSUB8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SSUB16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UADD8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UADD16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UASX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::USAX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::USUB8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::USUB16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::SADD8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SADD16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SASX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SSAX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SSUB8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SSUB16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UADD8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UADD16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UASX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::USAX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::USUB8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::USUB16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
 
 // Parallel Add/Subtract (Saturating) instructions
-void ArmTranslator::QADD8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::QADD16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::QASX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::QSAX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::QSUB8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::QSUB16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UQADD8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UQADD16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UQASX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UQSAX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UQSUB8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UQSUB16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::QADD8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::QADD16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::QASX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::QSAX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::QSUB8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::QSUB16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UQADD8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UQADD16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UQASX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UQSAX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UQSUB8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UQSUB16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
 
 // Parallel Add/Subtract (Halving) instructions
-void ArmTranslator::SHADD8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SHADD16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SHASX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SHSAX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SHSUB8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SHSUB16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UHADD8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UHADD16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UHASX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UHSAX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UHSUB8(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::UHSUB16(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::SHADD8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SHADD16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SHASX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SHSAX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SHSUB8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SHSUB16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UHADD8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UHADD16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UHASX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UHSAX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UHSUB8(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::UHSUB16(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
 
 // Saturated Add/Subtract instructions
-void ArmTranslator::QADD(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::QSUB(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::QDADD(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::QDSUB(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::QADD(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::QSUB(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::QDADD(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::QDSUB(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
 
 // Synchronization Primitive instructions
 void ArmTranslator::CLREX() { FallbackToInterpreter(); }
-void ArmTranslator::LDREX(Cond cond, ArmReg Rn, ArmReg Rd) { FallbackToInterpreter(); }
-void ArmTranslator::LDREXB(Cond cond, ArmReg Rn, ArmReg Rd) { FallbackToInterpreter(); }
-void ArmTranslator::LDREXD(Cond cond, ArmReg Rn, ArmReg Rd) { FallbackToInterpreter(); }
-void ArmTranslator::LDREXH(Cond cond, ArmReg Rn, ArmReg Rd) { FallbackToInterpreter(); }
-void ArmTranslator::STREX(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::STREXB(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::STREXD(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::STREXH(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SWP(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
-void ArmTranslator::SWPB(Cond cond, ArmReg Rn, ArmReg Rd, ArmReg Rm) { FallbackToInterpreter(); }
+void ArmTranslator::LDREX(Cond cond, ArmReg Rn_index, ArmReg Rd_index) { FallbackToInterpreter(); }
+void ArmTranslator::LDREXB(Cond cond, ArmReg Rn_index, ArmReg Rd_index) { FallbackToInterpreter(); }
+void ArmTranslator::LDREXD(Cond cond, ArmReg Rn_index, ArmReg Rd_index) { FallbackToInterpreter(); }
+void ArmTranslator::LDREXH(Cond cond, ArmReg Rn_index, ArmReg Rd_index) { FallbackToInterpreter(); }
+void ArmTranslator::STREX(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::STREXB(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::STREXD(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::STREXH(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SWP(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
+void ArmTranslator::SWPB(Cond cond, ArmReg Rn_index, ArmReg Rd_index, ArmReg Rm_index) { FallbackToInterpreter(); }
 
 // Status register access instructions
 void ArmTranslator::CPS() { FallbackToInterpreter(); }
