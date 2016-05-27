@@ -11,7 +11,7 @@
 
 #include "common/common_types.h"
 
-#include "core/arm/jit/common.h"
+#include "core/arm/jit/jit_common.h"
 
 namespace ArmDecoder {
 

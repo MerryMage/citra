@@ -7,9 +7,11 @@ set(SRCS
             arm/dyncom/arm_dyncom_thumb.cpp
             arm/jit/decoder/arm.cpp
             arm/jit/decoder/thumb.cpp
-            arm/jit/ir.cpp
-            arm/jit/ir_builder.cpp
-            arm/jit/translate.cpp
+            arm/jit/ir/micro_builder.cpp
+            arm/jit/ir/micro_ir.cpp
+            arm/jit/ir/micro_ops.cpp
+            arm/jit/translate/translate.cpp
+            arm/jit/translate/translate_arm.cpp
             arm/skyeye_common/armstate.cpp
             arm/skyeye_common/armsupp.cpp
             arm/skyeye_common/vfp/vfp.cpp
@@ -144,9 +146,11 @@ set(HEADERS
             arm/dyncom/arm_dyncom_thumb.h
             arm/jit/common.h
             arm/jit/decoder/decoder.h
-            arm/jit/ir.h
-            arm/jit/ir_builder.h
-            arm/jit/translate.h
+            arm/jit/ir/micro_builder.h
+            arm/jit/ir/micro_ir.h
+            arm/jit/ir/micro_ops.h
+            arm/jit/translate/translate.h
+            arm/jit/translate/translate_arm.h
             arm/skyeye_common/arm_regformat.h
             arm/skyeye_common/armstate.h
             arm/skyeye_common/armsupp.h

@@ -10,7 +10,8 @@
 #include "common/common_types.h"
 #include "common/scope_exit.h"
 
-#include "core/arm/jit/translate.h"
+#include "core/arm/jit/ir/micro_ir.h"
+#include "core/arm/jit/translate/translate.h"
 #include "core/core.h"
 #include "core/memory_setup.h"
 
