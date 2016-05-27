@@ -10,10 +10,10 @@ using Type = MicroType;
 using Flag = MicroArmFlags;
 
 const std::map<MicroOp, const MicroOpInfo> micro_op_info {{
-    // Basic load/stores
-    { Op::ConstU32,     { Op::ConstU32,     Type::U32,  Flag::None, Flag::None, {} } },
-    { Op::GetGPR,       { Op::GetGPR,       Type::U32,  Flag::None, Flag::None, {} } },
-    { Op::SetGPR,       { Op::SetGPR,       Type::Void, Flag::None, Flag::None, { Type::U32 } } },
+    // Basic
+    // Op::ConstU32 does not belong in this table
+    // Op::GetGPR does not belong in this table
+    // Op::SetGPR does not belong in this table
 
     // ARM ALU
     { Op::Add,          { Op::Add,          Type::U32,  Flag::None, Flag::NZCV, { Type::U32, Type::U32 } } },

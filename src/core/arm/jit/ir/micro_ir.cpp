@@ -73,16 +73,10 @@ void MicroSetGPR::ReplaceUseOfXWithY(std::shared_ptr<MicroValue> x, std::shared_
 
 // MicroInst class member definitions
 
-MicroInst::MicroInst(MicroOp op_, std::initializer_list<std::shared_ptr<MicroValue>> values)
+MicroInst::MicroInst(MicroOp op_)
     : op(op_), write_flags(GetMicroOpInfo(op).default_write_flags)
 {
-    ASSERT(GetMicroOpInfo(op).NumArgs() == values.size());
-    args.resize(values.size());
-
-    size_t index = 0;
-    for (auto& value : values) {
-        SetArg(index++, value);
-    }
+    args.resize(GetMicroOpInfo(op).NumArgs());
 }
 
 MicroType MicroInst::GetType() const {
@@ -117,6 +111,10 @@ MicroArmFlags MicroInst::ReadFlags() const {
 
 MicroArmFlags MicroInst::WriteFlags() const {
     return write_flags;
+}
+
+void MicroInst::AssertValid() {
+    ASSERT(std::all_of(args.begin(), args.end(), [](const auto& arg) { return !arg.expired(); }));
 }
 
 void MicroInst::ReplaceUseOfXWithY(std::shared_ptr<MicroValue> x, std::shared_ptr<MicroValue> y) {

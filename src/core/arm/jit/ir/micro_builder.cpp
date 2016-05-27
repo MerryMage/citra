@@ -2,8 +2,6 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
-#include <initializer_list>
-
 #include "common/assert.h"
 
 #include "core/arm/jit/ir/micro_builder.h"
@@ -11,8 +9,6 @@
 #include "core/arm/jit/ir/micro_ops.h"
 
 namespace ArmJit {
-
-using MicroValueList = std::initializer_list<std::shared_ptr<MicroValue>>;
 
 std::shared_ptr<MicroValue> MicroBuilder::GetGPR(ArmReg reg) {
     auto value = std::make_shared<MicroGetGPR>(reg);
@@ -27,13 +23,16 @@ std::shared_ptr<MicroValue> MicroBuilder::ConstU32(u32 u32_value) {
 }
 
 std::shared_ptr<MicroValue> MicroBuilder::SetGPR(ArmReg reg, std::shared_ptr<MicroValue> a) {
-    auto value = std::make_shared<MicroSetGPR>(reg, a);
+    auto value = std::make_shared<MicroSetGPR>(reg);
+    value->SetArg(a);
     block.instructions.emplace_back(value);
     return value;
 }
 
 std::shared_ptr<MicroValue> MicroBuilder::Inst(MicroOp op, std::shared_ptr<MicroValue> a, MicroArmFlags write_flags) {
-    auto value = std::make_shared<MicroInst>(op, MicroValueList{ a });
+    auto value = std::make_shared<MicroInst>(op);
+    value->SetArg(0, a);
+    value->AssertValid();
 
     // Ensure we aren't trying to request writes to any flags this instruction cannot write.
     ASSERT((write_flags & ~value->WriteFlags()) == MicroArmFlags::None);
@@ -45,7 +44,10 @@ std::shared_ptr<MicroValue> MicroBuilder::Inst(MicroOp op, std::shared_ptr<Micro
 }
 
 std::shared_ptr<MicroValue> MicroBuilder::Inst(MicroOp op, std::shared_ptr<MicroValue> a, std::shared_ptr<MicroValue> b, MicroArmFlags write_flags) {
-    auto value = std::make_shared<MicroInst>(op, MicroValueList{ a, b });
+    auto value = std::make_shared<MicroInst>(op);
+    value->SetArg(0, a);
+    value->SetArg(1, b);
+    value->AssertValid();
 
     // Ensure we aren't trying to request writes to any flags this instruction cannot write.
     ASSERT((write_flags & ~value->WriteFlags()) == MicroArmFlags::None);

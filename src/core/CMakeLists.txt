@@ -10,6 +10,7 @@ set(SRCS
             arm/jit/ir/micro_builder.cpp
             arm/jit/ir/micro_ir.cpp
             arm/jit/ir/micro_ops.cpp
+            arm/jit/jit_interpret/jit_interpret.cpp
             arm/jit/translate/translate.cpp
             arm/jit/translate/translate_arm.cpp
             arm/skyeye_common/armstate.cpp
@@ -144,11 +145,12 @@ set(HEADERS
             arm/dyncom/arm_dyncom_interpreter.h
             arm/dyncom/arm_dyncom_run.h
             arm/dyncom/arm_dyncom_thumb.h
-            arm/jit/common.h
+            arm/jit/jit_common.h
             arm/jit/decoder/decoder.h
             arm/jit/ir/micro_builder.h
             arm/jit/ir/micro_ir.h
             arm/jit/ir/micro_ops.h
+            arm/jit/jit_interpret/jit_interpret.h
             arm/jit/translate/translate.h
             arm/jit/translate/translate_arm.h
             arm/skyeye_common/arm_regformat.h

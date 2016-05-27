@@ -20,8 +20,8 @@ enum class MicroOp {
     PushRSBHint,       // R[14] := $0, and pushes return info onto the return stack buffer [optimization].
 
     // ARM PC
-    AluWritePC,        // R[15] := $0 & (APSR.T ? 0xFFFFFFFE : 0xFFFFFFFC) // ARMv6 behaviour
-    LoadWritePC,       // R[15] := $0 & 0xFFFFFFFE, APSR.T := $0 & 0x1     // ARMv6 behaviour (UNPREDICTABLE if $0 & 0x3 == 0)
+    BranchWritePC,     // R[15] := $0 & (APSR.T ? 0xFFFFFFFE : 0xFFFFFFFC)
+    BXWritePC,         // R[15] := $0 & 0xFFFFFFFE, APSR.T := $0 & 0x1     // UNPREDICTABLE if $0 & 0x3 == 0
 
     // ARM ALU
     Add,               // value := $0 + $1, writes ASPR.NZCV

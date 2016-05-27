@@ -5,7 +5,6 @@
 #pragma once
 
 #include <cstddef>
-#include <initializer_list>
 #include <list>
 #include <memory>
 #include <vector>
@@ -186,9 +185,7 @@ public:
 /// Representation of a GPR store instruction.
 class MicroSetGPR final : public MicroValue {
 public:
-    MicroSetGPR(ArmReg reg_, std::shared_ptr<MicroValue> arg_) : reg(reg_) {
-        SetArg(arg_);
-    }
+    MicroSetGPR(ArmReg reg_) : reg(reg_) {}
     ~MicroSetGPR() override = default;
 
     MicroOp GetOp() const override { return MicroOp::SetGPR; }
@@ -214,7 +211,7 @@ private:
  */
 class MicroInst final : public MicroValue {
 public:
-    MicroInst(MicroOp op, std::initializer_list<std::shared_ptr<MicroValue>> values);
+    MicroInst(MicroOp op);
     ~MicroInst() override = default;
 
     MicroOp GetOp() const override { return op; }
@@ -230,6 +227,8 @@ public:
     MicroArmFlags ReadFlags() const override;
     MicroArmFlags WriteFlags() const override;
     void SetWriteFlags(MicroArmFlags flags) { write_flags = flags; }
+
+    void AssertValid();
 
 protected:
     void ReplaceUseOfXWithY(std::shared_ptr<MicroValue> x, std::shared_ptr<MicroValue> y) override;
@@ -253,6 +252,7 @@ public:
     LocationDescriptor location;
     std::list<std::shared_ptr<MicroValue>> instructions;
     MicroTerminal terminal;
+    size_t cycles_consumed = 0;
 };
 
 } // namespace ArmJit

@@ -12,6 +12,8 @@
 
 #include "core/arm/jit/ir/micro_ir.h"
 #include "core/arm/jit/translate/translate.h"
+#include "core/arm/jit/jit_interpret/jit_interpret.h"
+#include "core/arm/skyeye_common/armstate.h"
 #include "core/core.h"
 #include "core/memory_setup.h"
 
@@ -52,5 +54,17 @@ TEST_CASE("Test ARM Translator", "[arm-translator]") {
         REQUIRE(iter == block.instructions.end());
         REQUIRE(block.terminal.type() == typeid(MicroTerm::LinkBlock));  //   LinkBlock { pc: 0x4, T: false, E: false }
         REQUIRE(boost::get<MicroTerm::LinkBlock>(block.terminal).next == LocationDescriptor(4, false, false));
+
+        Interpret::ARM_MicroInterpreter interpreter(PrivilegeMode::USER32MODE);
+        for (int i = 0; i < 15; i++)
+            interpreter.SetReg(i, i);
+
+        interpreter.ExecuteInstructions(2);
+
+        REQUIRE(interpreter.GetReg(0) == 0);
+        REQUIRE(interpreter.GetReg(1) == 5);
+        REQUIRE(interpreter.GetReg(2) == 2);
+        REQUIRE(interpreter.GetReg(3) == 3);
+        REQUIRE(interpreter.GetReg(15) == 4);
     }
 }
