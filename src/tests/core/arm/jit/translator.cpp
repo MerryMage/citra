@@ -10,6 +10,7 @@
 #include "common/common_types.h"
 #include "common/scope_exit.h"
 
+#include "core/arm/dyncom/arm_dyncom.h"
 #include "core/arm/jit/ir/micro_ir.h"
 #include "core/arm/jit/translate/translate.h"
 #include "core/arm/jit/jit_interpret/jit_interpret.h"
@@ -55,12 +56,27 @@ TEST_CASE("Test ARM Translator", "[arm-translator]") {
         REQUIRE(block.terminal.type() == typeid(MicroTerm::LinkBlock));  //   LinkBlock { pc: 0x4, T: false, E: false }
         REQUIRE(boost::get<MicroTerm::LinkBlock>(block.terminal).next == LocationDescriptor(4, false, false));
 
+        ARM_DynCom skyeye(PrivilegeMode::USER32MODE);
         Interpret::ARM_MicroInterpreter interpreter(PrivilegeMode::USER32MODE);
-        for (int i = 0; i < 15; i++)
-            interpreter.SetReg(i, i);
 
+        for (int i = 0; i < 15; i++) {
+            skyeye.SetReg(i, i);
+            interpreter.SetReg(i, i);
+        }
+
+        skyeye.ExecuteInstructions(2);
         interpreter.ExecuteInstructions(2);
 
+        for (int i = 0; i < 16; i++) {
+            printf("skeye:       r%i: 0x%08x\n", i, skyeye.GetReg(i));
+            printf("microinterp: r%i: 0x%08x\n", i, interpreter.GetReg(i));
+        }
+        printf("skyeye:      Cpsr: 0x%08x\n", skyeye.GetCPSR());
+        printf("microinterp: Cpsr: 0x%08x\n", interpreter.GetCPSR());
+
+        for (int i = 0; i < 16; i++) {
+            REQUIRE(skyeye.GetReg(i) == interpreter.GetReg(i));
+        }
         REQUIRE(interpreter.GetReg(0) == 0);
         REQUIRE(interpreter.GetReg(1) == 5);
         REQUIRE(interpreter.GetReg(2) == 2);
