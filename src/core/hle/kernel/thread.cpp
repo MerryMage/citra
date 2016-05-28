@@ -210,17 +210,6 @@ static void SwitchContext(Thread* new_thread) {
 
         current_thread = new_thread;
 
-        // If the thread was waited by a svcWaitSynch call, step back PC by one instruction to rerun
-        // the SVC when the thread wakes up. This is necessary to ensure that the thread can acquire
-        // the requested wait object(s) before continuing.
-        if (new_thread->waitsynch_waited) {
-            // CPSR flag indicates CPU mode
-            bool thumb_mode = (new_thread->context.cpsr & TBIT) != 0;
-
-            // SVC instruction is 2 bytes for THUMB, 4 bytes for ARM
-            new_thread->context.pc -= thumb_mode ? 2 : 4;
-        }
-
         // Clean up the thread's wait_objects, they'll be restored if needed during
         // the svcWaitSynchronization call
         for (size_t i = 0; i < new_thread->wait_objects.size(); ++i) {
@@ -272,6 +261,19 @@ void WaitCurrentThread_Sleep() {
     HLE::Reschedule(__func__);
 }
 
+/// Ensure the instruction we're sitting on is a SVC #0x24 or SVC #0x25 (sanity check).
+static void AssertOnWaitSynchronizationInstruction(bool thumb_mode, u32 pc) {
+    if (thumb_mode) {
+        u16 inst = Memory::Read16(pc & 0xFFFFFFFE);
+        // svc #0x24 or svc #0x25
+        ASSERT(inst == 0xDF24 || inst == 0xDF25);
+    } else {
+        u32 inst = Memory::Read32(pc & 0xFFFFFFFC) & 0x0FFFFFFF;
+        // svc #0x24 or svc #0x25 with any conditional
+        ASSERT(inst == 0x0F000024 || inst == 0x0F000025);
+    }
+}
+
 void WaitCurrentThread_WaitSynchronization(std::vector<SharedPtr<WaitObject>> wait_objects, bool wait_set_output, bool wait_all) {
     Thread* thread = GetCurrentThread();
     thread->wait_set_output = wait_set_output;
@@ -279,6 +281,12 @@ void WaitCurrentThread_WaitSynchronization(std::vector<SharedPtr<WaitObject>> wa
     thread->wait_objects = std::move(wait_objects);
     thread->waitsynch_waited = true;
     thread->status = THREADSTATUS_WAIT_SYNCH;
+
+    // Step back PC by one instruction to rerun the SVC when the thread wakes up.
+    // This is necessary to ensure that the thread can acquire the requested wait object(s) before continuing.
+    bool thumb_mode = (Core::g_app_core->GetCPSR() & TBIT) != 0;
+    AssertOnWaitSynchronizationInstruction(thumb_mode, Core::g_app_core->GetPC());
+    Core::g_app_core->SetPC(Core::g_app_core->GetPC() - (thumb_mode ? 2 : 4));
 }
 
 void WaitCurrentThread_ArbitrateAddress(VAddr wait_address) {
@@ -300,6 +308,19 @@ static void ThreadWakeupCallback(u64 thread_handle, int cycles_late) {
     }
 
     thread->waitsynch_waited = false;
+
+    if (thread->status == THREADSTATUS_WAIT_SYNCH) {
+        // Step forward PC by one instruction to NOT rerun the SVC when the thread wakes up.
+        if (thread == GetCurrentThread()) {
+            bool thumb_mode = (Core::g_app_core->GetCPSR() & TBIT) != 0;
+            AssertOnWaitSynchronizationInstruction(thumb_mode, Core::g_app_core->GetPC());
+            Core::g_app_core->SetPC(Core::g_app_core->GetPC() + (thumb_mode ? 2 : 4));
+        } else {
+            bool thumb_mode = (thread->context.cpsr & TBIT) != 0;
+            AssertOnWaitSynchronizationInstruction(thumb_mode, thread->context.pc);
+            thread->context.pc += thumb_mode ? 2 : 4;
+        }
+    }
 
     if (thread->status == THREADSTATUS_WAIT_SYNCH || thread->status == THREADSTATUS_WAIT_ARB) {
         thread->SetWaitSynchronizationResult(ResultCode(ErrorDescription::Timeout, ErrorModule::OS,

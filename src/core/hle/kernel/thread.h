@@ -203,7 +203,8 @@ Thread* GetCurrentThread();
 void WaitCurrentThread_Sleep();
 
 /**
- * Waits the current thread from a WaitSynchronization call
+ * Waits the current thread from a WaitSynchronization call.
+ * @note Also steps back the PC one instruction so the previous SVC will be called again on thread wakeup.
  * @param wait_objects Kernel objects that we are waiting on
  * @param wait_set_output If true, set the output parameter on thread wakeup (for WaitSynchronizationN only)
  * @param wait_all If true, wait on all objects before resuming (for WaitSynchronizationN only)
