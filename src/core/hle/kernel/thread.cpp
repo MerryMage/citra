@@ -579,11 +579,19 @@ void Reschedule() {
 }
 
 void Thread::SetWaitSynchronizationResult(ResultCode result) {
-    context.cpu_registers[0] = result.raw;
+    if (this == GetCurrentThread()) {
+        Core::g_app_core->SetReg(0, result.raw);
+    } else {
+        context.cpu_registers[0] = result.raw;
+    }
 }
 
 void Thread::SetWaitSynchronizationOutput(s32 output) {
-    context.cpu_registers[1] = output;
+    if (this == GetCurrentThread()) {
+        Core::g_app_core->SetReg(1, output);
+    } else {
+        context.cpu_registers[1] = output;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
