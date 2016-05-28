@@ -564,8 +564,16 @@ void Reschedule() {
     HLE::DoneRescheduling();
 
     // Don't bother switching to the same thread
-    if (next == cur)
+    if (next == cur) {
+        if (next) {
+            // The status can be THREADSTATUS_READY and not THREADSTATUS_RUNNING as one would expect.
+            // This occurs in the case when an object the thread is waiting on immediately wakes up
+            // the current thread before Reschedule() is called.
+            ASSERT(next->status == THREADSTATUS_RUNNING || next->status == THREADSTATUS_READY);
+            next->status = THREADSTATUS_RUNNING;
+        }
         return;
+    }
 
     if (cur && next) {
         LOG_TRACE(Kernel, "context switch %u -> %u", cur->GetObjectId(), next->GetObjectId());
