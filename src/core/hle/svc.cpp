@@ -1081,6 +1081,14 @@ MICROPROFILE_DEFINE(Kernel_SVC, "Kernel", "SVC", MP_RGB(70, 200, 70));
 void CallSVC(u32 immediate) {
     MICROPROFILE_SCOPE(Kernel_SVC);
 
+    // TODO(bunnei): It seems that games depend on some CPU execution time elapsing during HLE
+    // routines. This simulates that time by artificially advancing the number of CPU "ticks".
+    // The value was chosen empirically, it seems to work well enough for everything tested, but
+    // is likely not ideal. We should find a more accurate way to simulate timing with HLE.
+    // NOTE(merry): This is performed before service functions are called and not during or after
+    // because the thread-state is well defined at this point in time. (See #1837, #1854, #1868.)
+    Core::g_app_core->AddTicks(4000);
+
     const FunctionDef* info = GetSVCInfo(immediate);
     if (info) {
         if (info->func) {
