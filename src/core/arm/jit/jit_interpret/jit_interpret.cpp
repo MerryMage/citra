@@ -15,6 +15,7 @@
 #include <core/arm/jit/ir/micro_ir.h>
 #include <map>
 #include <boost/variant/get.hpp>
+#include <core/arm/dyncom/arm_dyncom_interpreter.h>
 
 namespace ArmJit {
 namespace Interpret {
@@ -139,35 +140,47 @@ void RunTAC(ARMul_State& cpu_state, TACRunState& state, const TACBlock& block) {
         }
     }
 
+    auto restore_cpu_state = [&]() {
+        cpu_state.Cpsr &= ~((1 << 5) | (1 << 9) | (1 << 31) | (1 << 30) | (1 << 29) | (1 << 28));
+        if (TFlag) cpu_state.Cpsr |= (1 << 5);
+        if (EFlag) cpu_state.Cpsr |= (1 << 9);
+        if (NFlag) cpu_state.Cpsr |= (1 << 31);
+        if (ZFlag) cpu_state.Cpsr |= (1 << 30);
+        if (CFlag) cpu_state.Cpsr |= (1 << 29);
+        if (VFlag) cpu_state.Cpsr |= (1 << 28);
+
+        std::memcpy(cpu_state.Reg.data(), state.regs.data(), 16 * sizeof(u32));
+    };
+
     if (block.terminal.type() == typeid(MicroTerm::PopRSBHint) || block.terminal.type() == typeid(MicroTerm::ReturnToDispatch)) {
         state.cond = Cond::AL;
+        restore_cpu_state();
     } else if (block.terminal.type() == typeid(MicroTerm::LinkBlock)) {
         auto link = boost::get<MicroTerm::LinkBlock>(block.terminal);
         regs[15] = link.next.arm_pc;
         TFlag = link.next.TFlag;
         EFlag = link.next.EFlag;
         state.cond = link.next.cond;
+        restore_cpu_state();
     } else if (block.terminal.type() == typeid(MicroTerm::LinkBlockFast)) {
         auto link = boost::get<MicroTerm::LinkBlock>(block.terminal);
         regs[15] = link.next.arm_pc;
         TFlag = link.next.TFlag;
         EFlag = link.next.EFlag;
         state.cond = link.next.cond;
+        restore_cpu_state();
     } else if (block.terminal.type() == typeid(MicroTerm::Interpret)) {
-        ASSERT(false); // Unimplemented for now.
+        auto link = boost::get<MicroTerm::Interpret>(block.terminal);
+        regs[15] = link.next.arm_pc;
+        TFlag = link.next.TFlag;
+        EFlag = link.next.EFlag;
+        state.cond = link.next.cond;
+        restore_cpu_state();
+        cpu_state.NumInstrsToExecute = 1;
+        InterpreterMainLoop(&cpu_state);
     } else {
         ASSERT(false); // Oops.
     }
-
-    cpu_state.Cpsr &= ~((1 << 5) | (1 << 9) | (1 << 31) | (1 << 30) | (1 << 29) | (1 << 28));
-    if (TFlag) cpu_state.Cpsr |= (1 << 5);
-    if (EFlag) cpu_state.Cpsr |= (1 << 9);
-    if (NFlag) cpu_state.Cpsr |= (1 << 31);
-    if (ZFlag) cpu_state.Cpsr |= (1 << 30);
-    if (CFlag) cpu_state.Cpsr |= (1 << 29);
-    if (VFlag) cpu_state.Cpsr |= (1 << 28);
-
-    std::memcpy(cpu_state.Reg.data(), state.regs.data(), 16 * sizeof(u32));
 }
 
 struct ARM_MicroInterpreter::Impl {
