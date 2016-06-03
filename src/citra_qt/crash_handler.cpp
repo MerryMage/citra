@@ -11,7 +11,13 @@
 // the crash handler is called, we're going to have to use reasonably
 // low-level methods to display things to the user.
 //
-// An advisable strategy is to get things onto the console first before trying to do fancy GUI stuff.
+// Keep it as simple as possible.
+//
+// An advisable strategy is to get things onto the console first before
+// trying to do fancy GUI stuff. TODO(merry): An even better strategy would
+// be to not do any processing at all and punt to a watchdog process, because
+// ideally one cannot assume memory allocation works (what if the crash was
+// in the allocator?) or stack allocate (what if rsp isn't in a valid state?).
 
 #ifdef _WIN32
 
@@ -19,11 +25,12 @@
 
 #include <windows.h> // Must include this first.
 #include <dbghelp.h>
-#include <tchar.h>
+
+#include "common/string_util.h"
 
 namespace CrashHandler {
 
-static LONG WINAPI MyUnhandledExceptionFilter(struct _EXCEPTION_POINTERS*);
+static LONG WINAPI MyUnhandledExceptionFilter(_EXCEPTION_POINTERS*);
 static std::string GetStackTrace(CONTEXT& c);
 
 void Register() {
@@ -36,11 +43,11 @@ void Register() {
  * @param ep The exception pointer containing exception information.
  * @return See Microsoft's documentation on SetUnhandledExceptionFilter for possible return values.
  */
-static LONG WINAPI MyUnhandledExceptionFilter(struct _EXCEPTION_POINTERS* ep) {
+static LONG WINAPI MyUnhandledExceptionFilter(_EXCEPTION_POINTERS* ep) {
     std::string stack_trace = GetStackTrace(*ep->ContextRecord);
 
-    std::string detail = std::string() +
-        "Version: " + Common::g_scm_branch + ":" + Common::g_scm_desc + "\n"
+    std::string detail =
+        std::string("Version: ") + Common::g_scm_branch + ":" + Common::g_scm_desc + "\n"
         "Commit: " + Common::g_scm_rev + "\n"
         "Stack Trace:\n" + stack_trace;
 
@@ -50,25 +57,25 @@ static LONG WINAPI MyUnhandledExceptionFilter(struct _EXCEPTION_POINTERS* ep) {
 
     std::string title = "Citra: Caught Unhandled Exception";
 
-    std::string message = std::string() +
-        "Press Ctrl+C to copy text\n" +
-        "Please also take a copy of the console window\n" +
-        "\n" +
-        detail;
+    std::string message = std::string("Press Ctrl+C to copy text\n"
+        "Please also take a copy of the console window\n\n") + detail;
 
-    // QMessageBox does not work and when it does it isn't happy. We need to use something lower-level.
+    // QMessageBox is not guaranteed to work here since:
+    // 1. We're not guaranteed to be in the GUI thread
+    // 2. Qt is not guaranteed to be in a valid state
+    // We need to use something lower-level.
     MessageBoxA(nullptr, message.c_str(), title.c_str(), MB_ICONSTOP);
-    FatalAppExit(0, _T("Terminating application"));
+    FatalAppExitA(0, "Terminating application");
 
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
 /**
  * This function walks the stack of the current thread using StackWalk64.
- * @param c The context record that contains the information on the stack of interest.
+ * @param ctx The context record that contains the information on the stack of interest.
  * @return A string containing a human-readable stack trace.
  */
-static std::string GetStackTrace(CONTEXT& c) {
+static std::string GetStackTrace(CONTEXT& ctx) {
     HANDLE process = GetCurrentProcess();
     HANDLE thread = GetCurrentThread();
 
@@ -84,7 +91,7 @@ static std::string GetStackTrace(CONTEXT& c) {
         SCOPE_EXIT({ free(symbol); });
 
         // Actually get symbol info.
-        DWORD64 symbol_displacement; // The number of bytes return_address is offset from the start of the function.
+        DWORD64 symbol_displacement; // The offset of return_address from the start of the function.
         SymGetSymFromAddr64(process, return_address, &symbol_displacement, symbol);
 
         // Get undecorated name.
@@ -92,12 +99,12 @@ static std::string GetStackTrace(CONTEXT& c) {
         UnDecorateSymbolName(symbol->Name, &undecorated_name[0], SYMBOL_NAME_SIZE, UNDNAME_COMPLETE);
 
         // Get source code line information.
-        DWORD line_displacement = 0; // The number of bytes return_address is offset from the first instruction of this line.
-        IMAGEHLP_LINE64 line = { 0 };
+        DWORD line_displacement = 0; // The offset of return_address from the first instruction of this line.
+        IMAGEHLP_LINE64 line = {};
         line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
         SymGetLineFromAddr64(process, return_address, &line_displacement, &line);
 
-        // Remove unnecessary path information before the "\\src\\" directory.s
+        // Remove unnecessary path information before the "\\src\\" directory.
         std::string file_name = "(null)";
         if (line.FileName) {
             file_name = line.FileName;
@@ -107,45 +114,41 @@ static std::string GetStackTrace(CONTEXT& c) {
         }
 
         // Format string
-        std::string ret;
-        ret.resize(1024);
-        size_t ret_size = snprintf(&ret[0], ret.size(), "[%llx] %s+0x%llx (%s:%i)\n", return_address, undecorated_name, symbol_displacement, file_name.c_str(), line.LineNumber);
-        ret.resize(ret_size);
-        return ret;
+        return Common::StringFromFormat("[%llx] %s+0x%llx (%s:%i)\n", return_address, undecorated_name, symbol_displacement, file_name.c_str(), line.LineNumber);
     };
 
     // Initialise symbols
-    if (SymInitialize(process, NULL, TRUE) == FALSE) {
+    if (SymInitialize(process, nullptr, TRUE) == FALSE) {
         fprintf(stderr, "Failed to get symbols. Continuing anyway...\n");
     }
     SymSetOptions(SymGetOptions() | SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
     SCOPE_EXIT({ SymCleanup(process); });
 
     // Extract stack information from context
-    STACKFRAME64 s;
-    s.AddrPC.Offset = c.Rip;
-    s.AddrPC.Mode = AddrModeFlat;
-    s.AddrStack.Offset = c.Rsp;
-    s.AddrStack.Mode = AddrModeFlat;
-    s.AddrFrame.Offset = c.Rbp;
-    s.AddrFrame.Mode = AddrModeFlat;
+    STACKFRAME64 sframe;
+    sframe.AddrPC.Offset = ctx.Rip;
+    sframe.AddrPC.Mode = AddrModeFlat;
+    sframe.AddrStack.Offset = ctx.Rsp;
+    sframe.AddrStack.Mode = AddrModeFlat;
+    sframe.AddrFrame.Offset = ctx.Rbp;
+    sframe.AddrFrame.Mode = AddrModeFlat;
 
     // Return value
     std::string stack_trace;
 
     // Walk the stack
     do {
-        if (!StackWalk64(IMAGE_FILE_MACHINE_AMD64, process, thread, &s, &c, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL)) {
+        if (!StackWalk64(IMAGE_FILE_MACHINE_AMD64, process, thread, &sframe, &ctx, nullptr, SymFunctionTableAccess64, SymGetModuleBase64, nullptr)) {
             stack_trace += "Last StackWalk64 failed\n";
             return stack_trace;
         }
 
-        if (s.AddrPC.Offset != 0) {
-            stack_trace += get_symbol_info(s.AddrPC.Offset);
+        if (sframe.AddrPC.Offset != 0) {
+            stack_trace += get_symbol_info(sframe.AddrPC.Offset);
         } else {
             stack_trace += "No Symbols: rip == 0\n";
         }
-    } while (s.AddrReturn.Offset != 0);
+    } while (sframe.AddrReturn.Offset != 0);
 
     return stack_trace;
 }
@@ -172,7 +175,7 @@ static const char* GetSignalName(int signal);
 static std::string GetStackTrace();
 
 #ifdef __APPLE__
-static void OSXMessageBox(std::string title, std::string message);
+static void OSXMessageBox(const std::string& title, const std::string& message);
 #endif
 
 void Register() {
@@ -200,19 +203,20 @@ static void SignalHandler(int signal) {
     fprintf(stderr, "Stack Trace:\n");
 
     std::string stack_trace = GetStackTrace();
+    fflush(stderr);
 
 #ifdef __APPLE__
     std::string title = "Caught Signal " + std::to_string(signal) + " (" + GetSignalName(signal) + ")";
 
-    std::string message = std::string() +
-        "Version: " + Common::g_scm_branch + "-" + Common::g_scm_desc + "\n" +
+    std::string message =
+        std::string("Version: ") + Common::g_scm_branch + "-" + Common::g_scm_desc + "\n" +
         "Commit: " + Common::g_scm_rev + "\n" +
         "Stack Trace:\n" + stack_trace;
 
     OSXMessageBox(title, message);
 #endif
 
-    exit(-1);
+    exit(EXIT_FAILURE);
 }
 
 static const char* GetSignalName(int signal) {
@@ -254,14 +258,17 @@ static std::string GetStackTrace() {
 }
 
 #ifdef __APPLE__
-static void OSXMessageBox(std::string title, std::string message) {
+static void OSXMessageBox(const std::string& title, const std::string& message) {
     // This implementation leaks memory, but at this point we don't really care.
-    id alert = objc_msgSend(objc_getClass("NSAlert"), sel_registerName("alloc"));
-    alert = objc_msgSend(alert, sel_registerName("init"));
-    objc_msgSend(alert, sel_getUid("setAlertStyle:"), 1);
-    objc_msgSend(alert, sel_getUid("setMessageText:"), CFSTR(message.c_str()));
-    objc_msgSend(alert, sel_getUid("setInformativeText:"), CFSTR(title.c_str()));
-    objc_msgSend(alert, sel_getUid("runModal"));
+    // Casting objc_msgSend is recommended to ensure correct semantics (it doesn't use vararg semantics as declared).
+    CFStringRef cftitle = CFStringCreateWithCString(nullptr, title.c_str(), kCFStringEncodingMacRoman);
+    CFStringRef cfmessage = CFStringCreateWithCString(nullptr, message.c_str(), kCFStringEncodingMacRoman);
+    id alert = reinterpret_cast<id(*)(Class, SEL)>(objc_msgSend)(objc_getClass("NSAlert"), sel_registerName("alloc"));
+    alert = reinterpret_cast<id(*)(id, SEL)>(objc_msgSend)(alert, sel_registerName("init"));
+    reinterpret_cast<void(*)(id, SEL, int)>(objc_msgSend)(alert, sel_getUid("setAlertStyle:"), 1);
+    reinterpret_cast<void(*)(id, SEL, CFStringRef)>(objc_msgSend)(alert, sel_getUid("setMessageText:"), cftitle);
+    reinterpret_cast<void(*)(id, SEL, CFStringRef)>(objc_msgSend)(alert, sel_getUid("setInformativeText:"), cfmessage);
+    reinterpret_cast<int(*)(id, SEL)>(objc_msgSend)(alert, sel_getUid("runModal"));
 }
 #endif
 
