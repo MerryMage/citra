@@ -1218,15 +1218,17 @@ unsigned InterpreterMainLoop(ARMul_State* cpu) {
             cpu->Reg[15] &= 0xfffffffc;
 
         // Find the cached instruction cream, otherwise translate it...
-        auto itr = cpu->instruction_cache.find(cpu->Reg[15]);
-        if (itr != cpu->instruction_cache.end()) {
-            ptr = itr->second;
-        } else if (cpu->NumInstrsToExecute != 1) {
-            if (InterpreterTranslateBlock(cpu, ptr, cpu->Reg[15]) == FETCH_EXCEPTION)
-                goto END;
-        } else {
-            if (InterpreterTranslateSingle(cpu, ptr, cpu->Reg[15]) == FETCH_EXCEPTION)
-                goto END;
+        {
+            auto itr = cpu->instruction_cache.find(cpu->Reg[15]);
+            if (itr != cpu->instruction_cache.end()) {
+                ptr = itr->second;
+            } else if (cpu->NumInstrsToExecute != 1) {
+                if (InterpreterTranslateBlock(cpu, ptr, cpu->Reg[15]) == FETCH_EXCEPTION)
+                    goto END;
+            } else {
+                if (InterpreterTranslateSingle(cpu, ptr, cpu->Reg[15]) == FETCH_EXCEPTION)
+                    goto END;
+            }
         }
 
         // Find breakpoint if one exists within the block
