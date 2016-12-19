@@ -40,6 +40,8 @@ add_library(common STATIC
     common_funcs.h
     common_paths.h
     common_types.h
+    crash_handler.cpp
+    crash_handler.h
     file_util.cpp
     file_util.h
     hash.h
