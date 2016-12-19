@@ -10,6 +10,10 @@
 #include "core/core.h"
 #include "ui_main.h"
 
+namespace Common {
+struct CrashInformation;
+}
+
 class Config;
 class EmuThread;
 class GameList;
@@ -135,6 +139,7 @@ private slots:
     void ToggleFullscreen();
     void ToggleWindowMode();
     void OnCreateGraphicsSurfaceViewer();
+    void OnCrashed(const Common::CrashInformation&);
     void OnCoreError(Core::System::ResultStatus, std::string);
     /// Called whenever a user selects Help->About Citra
     void OnMenuAboutCitra();

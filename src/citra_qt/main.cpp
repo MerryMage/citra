@@ -4,6 +4,7 @@
 
 #include <cinttypes>
 #include <clocale>
+#include <cstdlib>
 #include <memory>
 #include <thread>
 #include <glad/glad.h>
@@ -31,6 +32,7 @@
 #include "citra_qt/main.h"
 #include "citra_qt/ui_settings.h"
 #include "citra_qt/updater/updater.h"
+#include "common/crash_handler.h"
 #include "common/logging/backend.h"
 #include "common/logging/filter.h"
 #include "common/logging/log.h"
@@ -559,6 +561,8 @@ void GMainWindow::BootGame(const QString& filename) {
             Qt::BlockingQueuedConnection);
     connect(emu_thread.get(), SIGNAL(DebugModeLeft()), waitTreeWidget, SLOT(OnDebugModeLeft()),
             Qt::BlockingQueuedConnection);
+    connect(emu_thread.get(), SIGNAL(Crashed(Common::CrashInformation)), this,
+            SLOT(OnCrashed(Common::CrashInformation)), Qt::BlockingQueuedConnection);
 
     // Update the GUI
     registersWidget->OnDebugModeEntered();
@@ -834,6 +838,16 @@ void GMainWindow::UpdateStatusBar() {
     emu_speed_label->setVisible(true);
     game_fps_label->setVisible(true);
     emu_frametime_label->setVisible(true);
+}
+
+void GMainWindow::OnCrashed(const Common::CrashInformation& crash_info) {
+    QString message = tr("Citra has crashed. Crash information follows:\n");
+    for (const auto& line : crash_info.stack_trace) {
+        message += QString::fromStdString(line);
+        message += '\n';
+    }
+    QMessageBox::critical(this, tr("Citra"), message);
+    QCoreApplication::exit(EXIT_FAILURE);
 }
 
 void GMainWindow::OnCoreError(Core::System::ResultStatus result, std::string details) {

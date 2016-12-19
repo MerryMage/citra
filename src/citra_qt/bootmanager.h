@@ -20,6 +20,10 @@ class GGLWidgetInternal;
 class GMainWindow;
 class GRenderWindow;
 
+namespace Common {
+struct CrashInformation;
+}
+
 class EmuThread : public QThread {
     Q_OBJECT
 
@@ -97,6 +101,14 @@ signals:
      * Qt::BlockingQueuedConnection (additionally block source thread until slot returns)
      */
     void DebugModeLeft();
+
+    /**
+     * Emitted when the emulation thread crashes
+     *
+     * @warning Terminate the application soon after this signal is emitted. The program may
+     * not be in a well-defined state.
+     */
+    void Crashed(const Common::CrashInformation&);
 
     void ErrorThrown(Core::System::ResultStatus, std::string);
 };
