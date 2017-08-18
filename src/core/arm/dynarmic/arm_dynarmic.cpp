@@ -11,6 +11,8 @@
 #include "core/arm/dyncom/arm_dyncom_interpreter.h"
 #include "core/core.h"
 #include "core/core_timing.h"
+#include "core/hle/kernel/process.h"
+#include "core/hle/kernel/vm_manager.h"
 #include "core/hle/svc.h"
 #include "core/memory.h"
 
@@ -36,8 +38,12 @@ static void InterpreterFallback(u32 pc, Dynarmic::Jit* jit, void* user_arg) {
 }
 
 static bool IsReadOnlyMemory(u32 vaddr) {
-    // TODO(bunnei): ImplementMe
-    return false;
+    auto it = Kernel::g_current_process->vm_manager.FindVMA(vaddr);
+    if (it == Kernel::g_current_process->vm_manager.vma_map.end())
+        return false;
+    if (static_cast<int>(it->second.permissions) & static_cast<int>(Kernel::VMAPermission::Write))
+        return false;
+    return it->second.meminfo_state == Kernel::MemoryState::Code;
 }
 
 static Dynarmic::UserCallbacks GetUserCallbacks(
