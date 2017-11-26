@@ -13,6 +13,7 @@ set(SRCS
             configuration/configure_input.cpp
             configuration/configure_system.cpp
             configuration/configure_web.cpp
+            crash_dialog/crash_dialog.cpp
             debugger/graphics/graphics.cpp
             debugger/graphics/graphics_breakpoint_observer.cpp
             debugger/graphics/graphics_breakpoints.cpp
@@ -46,6 +47,7 @@ set(HEADERS
             configuration/configure_input.h
             configuration/configure_system.h
             configuration/configure_web.h
+            crash_dialog/crash_dialog.h
             debugger/graphics/graphics.h
             debugger/graphics/graphics_breakpoint_observer.h
             debugger/graphics/graphics_breakpoints.h
@@ -79,6 +81,7 @@ set(UIS
             configuration/configure_input.ui
             configuration/configure_system.ui
             configuration/configure_web.ui
+            crash_dialog/crash_dialog.ui
             debugger/registers.ui
             aboutdialog.ui
             hotkeys.ui
