@@ -28,6 +28,8 @@ add_executable(citra-qt
     configuration/configure_system.h
     configuration/configure_web.cpp
     configuration/configure_web.h
+    crash_dialog/crash_dialog.cpp
+    crash_dialog/crash_dialog.h
     debugger/graphics/graphics.cpp
     debugger/graphics/graphics.h
     debugger/graphics/graphics_breakpoint_observer.cpp
@@ -78,6 +80,7 @@ set(UIS
     configuration/configure_input.ui
     configuration/configure_system.ui
     configuration/configure_web.ui
+    crash_dialog/crash_dialog.ui
     debugger/registers.ui
     aboutdialog.ui
     hotkeys.ui
