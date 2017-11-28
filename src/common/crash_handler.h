@@ -5,13 +5,16 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <boost/optional.hpp>
 
 namespace Common {
 
 struct CrashInformation {
     std::vector<std::string> stack_trace;
+    boost::optional<std::string> minidump_filename;
 };
 
-void CrashHandler(std::function<void()> try_, std::function<void(const CrashInformation&)> catch_);
+void CrashHandler(std::function<void()> try_, std::function<void(const CrashInformation&)> catch_,
+                  boost::optional<std::string> minidump_filename = {});
 
 } // namespace Common

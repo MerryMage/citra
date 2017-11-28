@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <boost/optional.hpp>
 #include "common/scope_exit.h"
 #include "common/string_util.h"
 
@@ -22,14 +23,21 @@ namespace Common {
 static bool unhandled_exception_called;
 static std::jmp_buf unhandled_exception_jmp_buf;
 static std::vector<std::string> unhandled_exception_stack_trace;
+static boost::optional<std::string> minidump_filename;
+
+static void* ctx_buffer = nullptr;
+static PCONTEXT ctx = nullptr;
 
 static void Initialize();
 static LONG WINAPI UnhandledExceptionFilter(_EXCEPTION_POINTERS*);
 static void GetStackTrace(CONTEXT& c);
+static void CreateMiniDump(const std::string& filename, _EXCEPTION_POINTERS*);
 
 void CrashHandler(std::function<void()> try_,
-                  std::function<void(const Common::CrashInformation&)> catch_) {
+                  std::function<void(const Common::CrashInformation&)> catch_,
+                  boost::optional<std::string> filename) {
     unhandled_exception_called = false;
+    minidump_filename = filename;
 
     if (!ctx) {
         Initialize();
@@ -42,7 +50,7 @@ void CrashHandler(std::function<void()> try_,
     if (setjmp(unhandled_exception_jmp_buf) == 0) {
         try_();
     } else {
-        catch_({unhandled_exception_stack_trace});
+        catch_({unhandled_exception_stack_trace, minidump_filename});
     }
 
     SetUnhandledExceptionFilter(previous_filter);
@@ -80,6 +88,10 @@ static LONG WINAPI UnhandledExceptionFilter(_EXCEPTION_POINTERS* ep) {
         std::fflush(stderr);
     } else {
         unhandled_exception_stack_trace = {"Unable to get stack trace"};
+    }
+
+    if (minidump_filename) {
+        CreateMiniDump(*minidump_filename, ep);
     }
 
     std::longjmp(unhandled_exception_jmp_buf, 1);
@@ -174,6 +186,68 @@ static void GetStackTrace(CONTEXT& ctx) {
     }
 }
 
+/**
+ * This function is called by the operating system when a minidump is made.
+ * Microsoft's documentation on MiniDumpWriteDump for more information.
+ */
+static BOOL CALLBACK MiniDumpCallback(PVOID, const PMINIDUMP_CALLBACK_INPUT input,
+                                      PMINIDUMP_CALLBACK_OUTPUT output) {
+    if (!input || !output)
+        return FALSE;
+
+    switch (input->CallbackType) {
+    case IncludeModuleCallback:
+    case IncludeThreadCallback:
+    case ThreadCallback:
+    case ThreadExCallback:
+    case MemoryCallback:
+        return TRUE;
+
+    case ModuleCallback:
+        if (!(output->ModuleWriteFlags & ModuleReferencedByMemory)) {
+            // Exclude module from minidump if not referenced by memory
+            output->ModuleWriteFlags &= ~ModuleWriteModule;
+        }
+        return TRUE;
+
+    case CancelCallback:
+    default:
+        return FALSE;
+    }
+}
+
+/**
+ * Create a minidump.
+ * @param filename The location where the minidump will be created.
+ * @param ep The exception pointer containing exception information. This is required so that
+ *           minidump records for the current thread has the correct stack information at the
+ *           exception point.
+ */
+static void CreateMiniDump(const std::string& filename, _EXCEPTION_POINTERS* ep) {
+    HANDLE file = CreateFileA(filename.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
+                              CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == nullptr || file == INVALID_HANDLE_VALUE)
+        return;
+
+    MINIDUMP_EXCEPTION_INFORMATION ei;
+    ei.ThreadId = GetCurrentThreadId();
+    ei.ExceptionPointers = ep;
+    ei.ClientPointers = FALSE;
+
+    MINIDUMP_CALLBACK_INFORMATION ci;
+    ci.CallbackRoutine = MiniDumpCallback;
+    ci.CallbackParam = 0;
+
+    // One may want to add to this if minidumps were found to provide insufficient information.
+    MINIDUMP_TYPE t = static_cast<MINIDUMP_TYPE>(
+        MiniDumpNormal | MiniDumpWithIndirectlyReferencedMemory | MiniDumpScanMemory |
+        MiniDumpWithThreadInfo | MiniDumpWithFullMemoryInfo | MiniDumpIgnoreInaccessibleMemory);
+
+    MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file, t, &ei, 0, &ci);
+
+    CloseHandle(file);
+}
+
 } // namespace Common
 
 #else
@@ -181,7 +255,8 @@ static void GetStackTrace(CONTEXT& ctx) {
 namespace Common {
 
 void CrashHandler(std::function<void()> try_,
-                  std::function<void(const Common::CrashInformation&)> catch_) {
+                  std::function<void(const Common::CrashInformation&)> catch_,
+                  boost::optional<std::string> filename) {
     // Crash handler unimplemented for this platform
     try_();
 }
