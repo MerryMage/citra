@@ -1,6 +1,9 @@
 #include <QApplication>
+#include <QDateTime>
+#include <QDir>
 #include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QStandardPaths>
 #include <QScreen>
 #include <QWindow>
 
@@ -17,7 +20,14 @@
 #include "input_common/motion_emu.h"
 #include "network/network.h"
 
+static std::string GenerateMinidumpFilename() {
+    QString dir = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+    QString file = QDateTime::currentDateTime().toString("'minidump-citra-'yyyyMMdd-HHmmss'.dmp'");
+    return QDir::toNativeSeparators(dir + "/" + file).toStdString();
+}
+
 EmuThread::EmuThread(GRenderWindow* render_window) : render_window(render_window) {
+    // Custom types must be registered to be used with Qt signals/slots.
     qRegisterMetaType<Common::CrashInformation>("Common::CrashInformation");
 }
 
@@ -64,7 +74,8 @@ void EmuThread::run() {
                 }
             }
         },
-        [&](const Common::CrashInformation& crash_info) { emit Crashed(crash_info); });
+        [&](const Common::CrashInformation& crash_info) { emit Crashed(crash_info); },
+        GenerateMinidumpFilename());
 
     // Shutdown the core emulation
     Core::System::GetInstance().Shutdown();
