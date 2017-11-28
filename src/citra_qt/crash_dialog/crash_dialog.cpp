@@ -3,9 +3,15 @@
 // Refer to the license.txt file included.
 
 #include <memory>
+#include <string>
+#include <QFile>
+#include <fmt/format.h>
+#include <glad/glad.h>
+#include "citra_qt/crash_dialog/crash_dialog.h"
 #include "common/crash_handler.h"
 #include "common/scm_rev.h"
-#include "crash_dialog.h"
+#include "common/ui_util.h"
+#include "common/x64/cpu_detect.h"
 #include "ui_crash_dialog.h"
 
 CrashDialog::CrashDialog(QWidget* parent, const Common::CrashInformation& crash_info)
@@ -13,27 +19,36 @@ CrashDialog::CrashDialog(QWidget* parent, const Common::CrashInformation& crash_
     ui->setupUi(this);
 
     ui->informational_box->clear();
-    ui->informational_box->appendPlainText("Citra Crash Information");
-    ui->informational_box->appendPlainText("===========================");
-    ui->informational_box->appendPlainText("Build information:");
-    ui->informational_box->appendPlainText(Common::g_build_date);
-    ui->informational_box->appendPlainText(Common::g_build_name);
-    ui->informational_box->appendPlainText("Revision:");
-    ui->informational_box->appendPlainText(Common::g_scm_rev);
-    ui->informational_box->appendPlainText("Branch:");
-    ui->informational_box->appendPlainText(Common::g_scm_branch);
-    ui->informational_box->appendPlainText(Common::g_scm_desc);
-    ui->informational_box->appendPlainText("Stack trace:");
+    AddLine("Citra Crash Information");
+    AddLine("===========================");
+    AddLine(fmt::format("Build information: {} {}", Common::g_build_date, Common::g_build_name));
+    AddLine(fmt::format("Revision: {}", Common::g_scm_rev));
+    AddLine(fmt::format("Branch: {} {}", Common::g_scm_branch, Common::g_scm_desc));
+    AddLine(fmt::format("CPU: {} - {}", Common::GetCPUCaps().cpu_string,
+                        Common::GetCPUCaps().brand_string));
+    AddLine(fmt::format("GL Version: {}", reinterpret_cast<const char*>(glGetString(GL_VERSION))));
+    AddLine(fmt::format("GL Vendor: {}", reinterpret_cast<const char*>(glGetString(GL_VENDOR))));
+    AddLine(fmt::format("Renderer: {}", reinterpret_cast<const char*>(glGetString(GL_RENDERER))));
+    AddLine("Stack trace:");
     for (const auto& line : crash_info.stack_trace) {
-        ui->informational_box->appendPlainText(QString::fromStdString(line));
+        AddLine(line);
     }
 
     ui->informational_box->moveCursor(QTextCursor::Start);
     ui->informational_box->ensureCursorVisible();
+
+    if (crash_info.minidump_filename) {
+        minidump_filename = QString::fromStdString(*crash_info.minidump_filename);
+        ui->view_minidump_button->setEnabled(QFile::exists(minidump_filename));
+    }
 }
 
 CrashDialog::~CrashDialog() = default;
 
 void CrashDialog::on_view_minidump_button_released() {
-    // QMessageBox::critical(0, "Citra", "Unimplemented", QMessageBox::Ok);
+    Common::ShowInFileBrowser(minidump_filename.toStdString());
+}
+
+void CrashDialog::AddLine(const std::string& str) {
+    ui->informational_box->appendPlainText(QString::fromStdString(str));
 }

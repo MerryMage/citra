@@ -51,6 +51,9 @@
        <property name="text">
         <string>View Minidump</string>
        </property>
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
       </widget>
      </item>
     </layout>
