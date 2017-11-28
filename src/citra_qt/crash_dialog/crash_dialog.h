@@ -5,6 +5,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <QDialog>
 
 namespace Ui {
@@ -26,5 +27,8 @@ private slots:
     void on_view_minidump_button_released();
 
 private:
+    void AddLine(const std::string& str);
+
     std::unique_ptr<Ui::CrashDialog> ui;
+    QString minidump_filename;
 };
