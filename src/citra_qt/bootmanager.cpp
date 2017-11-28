@@ -1,6 +1,9 @@
 #include <QApplication>
+#include <QDateTime>
+#include <QDir>
 #include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QStandardPaths>
 
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
 // Required for screen DPI information
@@ -20,6 +23,12 @@
 #include "input_common/main.h"
 #include "input_common/motion_emu.h"
 #include "network/network.h"
+
+static std::string GenerateMinidumpFilename() {
+    QString dir = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+    QString file = QDateTime::currentDateTime().toString("'minidump-citra-'yyyyMMdd-HHmmss'.dmp'");
+    return QDir::toNativeSeparators(dir + "/" + file).toStdString();
+}
 
 EmuThread::EmuThread(GRenderWindow* render_window)
     : exec_step(false), running(false), stop_run(false), render_window(render_window) {
@@ -69,7 +78,8 @@ void EmuThread::run() {
                 }
             }
         },
-        [&](const Common::CrashInformation& crash_info) { emit Crashed(crash_info); });
+        [&](const Common::CrashInformation& crash_info) { emit Crashed(crash_info); },
+        GenerateMinidumpFilename());
 
     // Shutdown the core emulation
     Core::System::GetInstance().Shutdown();
