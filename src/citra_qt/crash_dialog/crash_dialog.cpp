@@ -14,6 +14,11 @@
 #include "common/x64/cpu_detect.h"
 #include "ui_crash_dialog.h"
 
+static const char* GetGLString(GLenum name) {
+    const char* str = reinterpret_cast<const char*>(glGetString(name));
+    return str ? str : "(null)";
+}
+
 CrashDialog::CrashDialog(QWidget* parent, const Common::CrashInformation& crash_info)
     : QDialog(parent), ui(std::make_unique<Ui::CrashDialog>()) {
     ui->setupUi(this);
@@ -26,9 +31,9 @@ CrashDialog::CrashDialog(QWidget* parent, const Common::CrashInformation& crash_
     AddLine(fmt::format("Branch: {} {}", Common::g_scm_branch, Common::g_scm_desc));
     AddLine(fmt::format("CPU: {} - {}", Common::GetCPUCaps().cpu_string,
                         Common::GetCPUCaps().brand_string));
-    AddLine(fmt::format("GL Version: {}", reinterpret_cast<const char*>(glGetString(GL_VERSION))));
-    AddLine(fmt::format("GL Vendor: {}", reinterpret_cast<const char*>(glGetString(GL_VENDOR))));
-    AddLine(fmt::format("Renderer: {}", reinterpret_cast<const char*>(glGetString(GL_RENDERER))));
+    AddLine(fmt::format("GL Version: {}", GetGLString(GL_VERSION)));
+    AddLine(fmt::format("GL Vendor: {}", GetGLString(GL_VENDOR)));
+    AddLine(fmt::format("GL Renderer: {}", GetGLString(GL_RENDERER)));
     AddLine("Stack trace:");
     for (const auto& line : crash_info.stack_trace) {
         AddLine(line);
