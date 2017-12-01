@@ -79,6 +79,7 @@ set(HEADERS
             thread.h
             thread_queue_list.h
             timer.h
+            ui_util.h
             vector_math.h
             )
 
@@ -91,6 +92,20 @@ if(ARCHITECTURE_x86_64)
             x64/cpu_detect.h
             x64/xbyak_abi.h
             x64/xbyak_util.h
+            )
+endif()
+
+if (WIN32)
+    set(SRCS ${SRCS}
+            ui_util_windows.cpp
+            )
+elseif (APPLE)
+    set(SRCS ${SRCS}
+            ui_util_macos.mm
+            )
+else()
+    set(SRCS ${SRCS}
+            ui_util_linux.cpp
             )
 endif()
 
