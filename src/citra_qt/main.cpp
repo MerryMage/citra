@@ -471,7 +471,7 @@ bool GMainWindow::LoadROM(const QString& filename) {
         QMessageBox::critical(this, tr("Error while initializing OpenGL 3.3 Core!"),
                               tr("Your GPU may not support OpenGL 3.3, or you do not "
                                  "have the latest graphics driver."));
-        return false;
+        //return false;
     }
 
     Core::System& system{Core::System::GetInstance()};
@@ -533,7 +533,7 @@ bool GMainWindow::LoadROM(const QString& filename) {
                 tr("An unknown error occured. Please see the log for more details."));
             break;
         }
-        return false;
+        //return false;
     }
     return true;
 }

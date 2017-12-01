@@ -87,7 +87,7 @@ after_build:
         $srcsrv += "SRCSRVTRG=https://raw.githubusercontent.com/%var2%/%var3%/%var4%`r`n"
         $srcsrv += "SRCSRV: source files ---------------------------------------`r`n"
         foreach ($repo in @{
-          "citra-emu/citra" = ""
+          "MerryMage/citra" = ""
           "citra-emu/ext-boost" = "externals/boost"
           "citra-emu/ext-soundtouch" = "externals/soundtouch"
           "fmtlib/fmt" = "externals/fmt"
