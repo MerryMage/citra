@@ -9,17 +9,17 @@ namespace Telemetry {
 
 void FieldCollection::Accept(VisitorInterface& visitor) const {
     for (const auto& field : fields) {
-        field.second->Accept(visitor);
+        //field.second->Accept(visitor);
     }
 }
 
 void FieldCollection::AddField(std::unique_ptr<FieldInterface> field) {
-    fields[field->GetName()] = std::move(field);
+    //fields[field->GetName()] = std::move(field);
 }
 
 template <class T>
 void Field<T>::Accept(VisitorInterface& visitor) const {
-    visitor.Visit(*this);
+    //visitor.Visit(*this);
 }
 
 template class Field<bool>;
