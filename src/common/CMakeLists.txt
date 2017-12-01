@@ -78,6 +78,7 @@ add_library(common STATIC
     threadsafe_queue.h
     timer.cpp
     timer.h
+    ui_util.h
     vector_math.h
 )
 
@@ -89,6 +90,23 @@ if(ARCHITECTURE_x86_64)
             x64/cpu_detect.h
             x64/xbyak_abi.h
             x64/xbyak_util.h
+    )
+endif()
+
+if (WIN32)
+    target_sources(common
+        PRIVATE
+            ui_util_windows.cpp
+    )
+elseif (APPLE)
+    target_sources(common
+        PRIVATE
+            ui_util_macos.mm
+    )
+else()
+    target_sources(common
+        PRIVATE
+            ui_util_linux.cpp
     )
 endif()
 
