@@ -234,6 +234,7 @@ void System::Shutdown() {
 
 template <typename Archive>
 void System::SerializeState(Archive& ar) {
+    CoreTiming::SerializeState(ar);
 }
 INSTANTIATE_SERALIZATION_FUNCTION(System::SerializeState)
 

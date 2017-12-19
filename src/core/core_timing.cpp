@@ -13,6 +13,7 @@
 #include <vector>
 #include "common/assert.h"
 #include "common/logging/log.h"
+#include "common/save_state_helper.h"
 #include "common/thread.h"
 #include "common/threadsafe_queue.h"
 
@@ -27,11 +28,39 @@ struct EventType {
     const std::string* name;
 };
 
+// unordered_map stores each element separately as a linked list node so pointers to elements
+// remain stable regardless of rehashes/resizing.
+static std::unordered_map<std::string, EventType> event_types;
+
 struct Event {
     s64 time;
     u64 fifo_order;
     u64 userdata;
     const EventType* type;
+
+    template <class Archive>
+    void save(Archive& ar) const {
+        ar(time, fifo_order, userdata, *type->name);
+    }
+
+    template <class Archive>
+    void load(Archive& ar) {
+        std::string name;
+        ar(time, fifo_order, userdata, name);
+
+        // event_types need to get registered before we load this part.
+        // Every part that registers events also needs to register them when loading save states.
+        auto itr = event_types.find(name);
+        if (itr != event_types.end()) {
+            type = &itr->second;
+        } else {
+            LOG_WARNING(
+                Core_Timing,
+                "Lost event from savestate because its type, \"%s\", has not been registered.",
+                name.c_str());
+            type = nullptr;
+        }
+    }
 };
 
 // Sort by time, unless the times are the same, in which case sort by the order added to the queue
@@ -42,10 +71,6 @@ static bool operator>(const Event& left, const Event& right) {
 static bool operator<(const Event& left, const Event& right) {
     return std::tie(left.time, left.fifo_order) < std::tie(right.time, right.fifo_order);
 }
-
-// unordered_map stores each element separately as a linked list node so pointers to elements
-// remain stable regardless of rehashes/resizing.
-static std::unordered_map<std::string, EventType> event_types;
 
 // The queue is a min-heap using std::make_heap/push_heap/pop_heap.
 // We don't use std::priority_queue because we need to be able to serialize, unserialize and
@@ -234,5 +259,12 @@ u64 GetGlobalTimeUs() {
 int GetDowncount() {
     return downcount;
 }
+
+template <class Archive>
+void SerializeState(Archive& archive) {
+    MoveEvents();
+    archive(event_queue, event_fifo_id, global_timer, slice_length, downcount);
+}
+INSTANTIATE_SERALIZATION_FUNCTION(SerializeState)
 
 } // namespace CoreTiming
