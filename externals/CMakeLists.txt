@@ -7,6 +7,10 @@ include(DownloadExternals)
 add_library(catch-single-include INTERFACE)
 target_include_directories(catch-single-include INTERFACE catch/single_include)
 
+# cereal
+add_library(cereal INTERFACE)
+target_include_directories(cereal INTERFACE cereal/include)
+
 # Crypto++
 add_subdirectory(cryptopp)
 

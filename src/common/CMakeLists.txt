@@ -75,6 +75,7 @@ add_library(common STATIC
     param_package.cpp
     param_package.h
     quaternion.h
+    save_state_helper.h
     scm_rev.cpp
     scm_rev.h
     scope_exit.h
@@ -106,7 +107,7 @@ endif()
 
 create_target_directory_groups(common)
 
-target_link_libraries(common PUBLIC Boost::boost fmt microprofile)
+target_link_libraries(common PUBLIC Boost::boost cereal fmt microprofile)
 if (ARCHITECTURE_x86_64)
     target_link_libraries(common PRIVATE xbyak)
 endif()

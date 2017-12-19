@@ -6,9 +6,11 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <fstream>
 #include <mutex>
 #include <QGLWidget>
 #include <QThread>
+#include <boost/optional.hpp>
 #include "common/thread.h"
 #include "core/core.h"
 #include "core/frontend/emu_window.h"
@@ -19,6 +21,10 @@ class QScreen;
 class GGLWidgetInternal;
 class GMainWindow;
 class GRenderWindow;
+
+namespace State {
+enum class LoadStateError;
+}
 
 class EmuThread : public QThread {
     Q_OBJECT
@@ -47,9 +53,10 @@ public:
      * @note This function is thread-safe
      */
     void SetRunning(bool running) {
-        std::unique_lock<std::mutex> lock(running_mutex);
-        this->running = running;
-        lock.unlock();
+        {
+            std::unique_lock<std::mutex> lock(running_mutex);
+            this->running = running;
+        }
         running_cv.notify_all();
     }
 
@@ -68,11 +75,39 @@ public:
     void RequestStop() {
         stop_run = true;
         SetRunning(false);
-    };
+    }
+
+    /**
+     * Requests for current state to be saved to a file
+     * @param to_file The file state should be saved to
+     * @note This function is thread-safe
+     */
+    void RequestSaveState(std::ofstream to_file) {
+        {
+            std::unique_lock<std::mutex> lock(running_mutex);
+            save_state = std::move(to_file);
+        }
+        running_cv.notify_all();
+    }
+
+    /**
+     * Requests for state to be loaded from a file
+     * @param from_file The file state should be loaded from
+     * @note This function is thread-safe
+     */
+    void RequestLoadState(std::ifstream from_file) {
+        {
+            std::unique_lock<std::mutex> lock(running_mutex);
+            load_state = std::move(from_file);
+        }
+        running_cv.notify_all();
+    }
 
 private:
     bool exec_step = false;
     bool running = false;
+    boost::optional<std::ofstream> save_state;
+    boost::optional<std::ifstream> load_state;
     std::atomic<bool> stop_run{false};
     std::mutex running_mutex;
     std::condition_variable running_cv;
@@ -97,6 +132,25 @@ signals:
      * Qt::BlockingQueuedConnection (additionally block source thread until slot returns)
      */
     void DebugModeLeft();
+
+    /**
+     * Emitted when state has been saved.
+     *
+     * @warning When connecting to this signal from other threads, make sure to specify either
+     * Qt::QueuedConnection (invoke slot within the destination object's message thread) or even
+     * Qt::BlockingQueuedConnection (additionally block source thread until slot returns)
+     */
+    void SaveStateCompleted();
+
+    /**
+     * Emitted when state has been loaded.
+     * @param error Result of the load. If error != None, emulation will be stopped.
+     *
+     * @warning When connecting to this signal from other threads, make sure to specify either
+     * Qt::QueuedConnection (invoke slot within the destination object's message thread) or even
+     * Qt::BlockingQueuedConnection (additionally block source thread until slot returns)
+     */
+    void LoadStateCompleted(State::LoadStateError error);
 
     void ErrorThrown(Core::System::ResultStatus, std::string);
 };

@@ -34,3 +34,6 @@
 [submodule "cubeb"]
     path = externals/cubeb
     url = https://github.com/kinetiknz/cubeb.git
+[submodule "cereal"]
+    path = externals/cereal
+    url = https://github.com/USCiLab/cereal.git
