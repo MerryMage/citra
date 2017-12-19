@@ -10,6 +10,7 @@
 #include "common/string_util.h"
 #include "core/3ds.h"
 #include "core/core.h"
+#include "core/save_state.h"
 #include "core/settings.h"
 #include "input_common/keyboard.h"
 #include "input_common/main.h"
@@ -30,7 +31,20 @@ void EmuThread::run() {
     // next execution step.
     bool was_active = false;
     while (!stop_run) {
-        if (running) {
+        if (save_state) {
+            std::unique_lock<std::mutex> lock(running_mutex);
+            State::SaveState(std::move(*save_state));
+            save_state.reset();
+            emit SaveStateCompleted();
+        } else if (load_state) {
+            std::unique_lock<std::mutex> lock(running_mutex);
+            State::LoadStateError result = State::LoadState(std::move(*load_state));
+            load_state.reset();
+            if (result != State::LoadStateError::None) {
+                stop_run = true;
+            }
+            emit LoadStateCompleted(result);
+        } else if (running) {
             if (!was_active)
                 emit DebugModeLeft();
 
@@ -54,7 +68,9 @@ void EmuThread::run() {
             was_active = false;
         } else {
             std::unique_lock<std::mutex> lock(running_mutex);
-            running_cv.wait(lock, [this] { return IsRunning() || exec_step || stop_run; });
+            running_cv.wait(lock, [this] {
+                return IsRunning() || exec_step || stop_run || save_state || load_state;
+            });
         }
     }
 

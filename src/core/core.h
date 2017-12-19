@@ -120,6 +120,9 @@ public:
         return *app_loader;
     }
 
+    template <typename Archive>
+    void SerializeState(Archive& ar);
+
 private:
     /**
      * Initialize the emulated system.

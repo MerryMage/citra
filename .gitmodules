@@ -31,3 +31,6 @@
 [submodule "inih"]
     path = externals/inih/inih
     url = https://github.com/benhoyt/inih.git
+[submodule "externals/cereal"]
+    path = externals/cereal
+    url = https://github.com/USCiLab/cereal
