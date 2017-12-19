@@ -11,11 +11,9 @@
 #include <tuple>
 #include <unordered_map>
 #include <vector>
-#include "cereal/archives/portable_binary.hpp"
-#include "cereal/types/string.hpp"
-#include "cereal/types/vector.hpp"
 #include "common/assert.h"
 #include "common/logging/log.h"
+#include "common/save_state_helper.h"
 #include "common/thread.h"
 #include "common/threadsafe_queue.h"
 
@@ -263,14 +261,10 @@ int GetDowncount() {
 }
 
 template <class Archive>
-void DoState(Archive& archive) {
+void SerializeState(Archive& archive) {
     MoveEvents();
     archive(event_queue, event_fifo_id, global_timer, slice_length, downcount);
 }
-
-template void DoState<cereal::PortableBinaryInputArchive>(
-    cereal::PortableBinaryInputArchive& archive);
-template void DoState<cereal::PortableBinaryOutputArchive>(
-    cereal::PortableBinaryOutputArchive& archive);
+INSTANTIATE_SERALIZATION_FUNCTION(SerializeState)
 
 } // namespace CoreTiming
