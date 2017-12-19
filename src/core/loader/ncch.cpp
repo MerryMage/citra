@@ -23,7 +23,6 @@
 #include "core/loader/ncch.h"
 #include "core/loader/smdh.h"
 #include "core/memory.h"
-#include "core/save_state.h"
 #include "network/network.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -167,8 +166,6 @@ ResultStatus AppLoader_NCCH::Load(Kernel::SharedPtr<Kernel::Process>& process) {
     }
 
     Core::Telemetry().AddField(Telemetry::FieldType::Session, "ProgramId", program_id);
-
-    State::SetTitleID(ncch_program_id);
 
     if (auto room_member = Network::GetRoomMember().lock()) {
         Network::GameInfo game_info;
