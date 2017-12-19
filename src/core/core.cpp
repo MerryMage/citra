@@ -19,6 +19,7 @@
 #include "core/hw/hw.h"
 #include "core/loader/loader.h"
 #include "core/memory_setup.h"
+#include "core/save_state.h"
 #include "core/settings.h"
 #include "network/network.h"
 #include "video_core/video_core.h"
@@ -160,6 +161,7 @@ System::ResultStatus System::Init(EmuWindow* emu_window, u32 system_mode) {
     Service::Init();
     AudioCore::Init();
     GDBStub::Init();
+    State::Init();
 
     if (!VideoCore::Init(emu_window)) {
         return ResultStatus::ErrorVideoCore;
