@@ -43,7 +43,7 @@ static void DoState(Archive& archive) {
     // Audio
 
     // Kernel
-
+    CoreTiming::DoState(archive);
 }
 
 static std::string CreateFileName() {

@@ -188,4 +188,7 @@ u64 GetGlobalTimeUs();
 
 int GetDowncount();
 
+template <class Archive>
+void DoState(Archive& archive);
+
 } // namespace CoreTiming
