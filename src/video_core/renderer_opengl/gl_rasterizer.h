@@ -110,14 +110,14 @@ private:
             }
         }
 
-        GLfloat position[4];
-        GLfloat color[4];
-        GLfloat tex_coord0[2];
-        GLfloat tex_coord1[2];
-        GLfloat tex_coord2[2];
+        GLvec4 position;
+        GLvec4 color;
+        GLvec2 tex_coord0;
+        GLvec2 tex_coord1;
+        GLvec2 tex_coord2;
         GLfloat tex_coord0_w;
-        GLfloat normquat[4];
-        GLfloat view[3];
+        GLvec4 normquat;
+        GLvec3 view;
     };
 
     struct LightSrc {
