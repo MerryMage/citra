@@ -109,6 +109,39 @@ public:
     GLuint handle = 0;
 };
 
+class OGLPipeline : private NonCopyable {
+public:
+    OGLPipeline() = default;
+    OGLPipeline(OGLPipeline&& o) {
+        std::swap(handle, o.handle);
+    }
+    ~OGLPipeline() {
+        Release();
+    }
+    OGLPipeline& operator=(OGLPipeline&& o) {
+        std::swap(handle, o.handle);
+        return *this;
+    }
+
+    /// Creates a new internal OpenGL resource and stores the handle
+    void Create() {
+        if (handle != 0)
+            return;
+        glGenProgramPipelines(1, &handle);
+    }
+
+    /// Deletes the internal OpenGL resource
+    void Release() {
+        if (handle == 0)
+            return;
+        glDeleteProgramPipelines(1, &handle);
+        OpenGLState::ResetPipeline(handle);
+        handle = 0;
+    }
+
+    GLuint handle = 0;
+};
+
 class OGLBuffer : private NonCopyable {
 public:
     OGLBuffer() = default;

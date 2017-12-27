@@ -68,6 +68,7 @@ OpenGLState::OpenGLState() {
     draw.vertex_buffer = 0;
     draw.uniform_buffer = 0;
     draw.shader_program = 0;
+    draw.program_pipeline = 0;
 
     scissor.enabled = false;
     scissor.x = 0;
@@ -291,6 +292,11 @@ void OpenGLState::Apply() const {
         glViewport(viewport.x, viewport.y, viewport.width, viewport.height);
     }
 
+    // Program pipeline
+    if (draw.program_pipeline != cur_state.draw.program_pipeline) {
+        glBindProgramPipeline(draw.program_pipeline);
+    }
+
     // Clip distance
     for (size_t i = 0; i < clip_distance.size(); ++i) {
         if (clip_distance[i] != cur_state.clip_distance[i]) {
@@ -340,6 +346,13 @@ OpenGLState& OpenGLState::ResetSampler(GLuint handle) {
 OpenGLState& OpenGLState::ResetProgram(GLuint handle) {
     if (draw.shader_program == handle) {
         draw.shader_program = 0;
+    }
+    return *this;
+}
+
+OpenGLState& OpenGLState::ResetPipeline(GLuint handle) {
+    if (draw.program_pipeline == handle) {
+        draw.program_pipeline = 0;
     }
     return *this;
 }
