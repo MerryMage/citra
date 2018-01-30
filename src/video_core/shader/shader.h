@@ -197,7 +197,6 @@ struct ShaderSetup {
     }
 
     std::array<u32, MAX_PROGRAM_CODE_LENGTH> program_code;
-    u64 program_code_hash;
     bool program_code_hash_dirty = true;
 
     u64 GetProgramCodeHash() {
@@ -209,7 +208,6 @@ struct ShaderSetup {
     }
 
     std::array<u32, MAX_SWIZZLE_DATA_LENGTH> swizzle_data;
-    u64 swizzle_data_hash;
     bool swizzle_data_hash_dirty = true;
 
     u64 GetSwizzleDataHash() {
@@ -226,6 +224,10 @@ struct ShaderSetup {
         /// Used by the JIT, points to a compiled shader object.
         const void* cached_shader = nullptr;
     } engine_data;
+
+private:
+    u64 program_code_hash;
+    u64 swizzle_data_hash;
 };
 
 class ShaderEngine {

@@ -9,6 +9,7 @@
 #include "common/bit_field.h"
 #include "common/logging/log.h"
 #include "core/core.h"
+#include "core/settings.h"
 #include "video_core/regs_framebuffer.h"
 #include "video_core/regs_lighting.h"
 #include "video_core/regs_rasterizer.h"
@@ -62,13 +63,33 @@ layout (std140) uniform shader_data {
 };
 )";
 
-static const std::string VertexOutputDef = R"(
-out vec4 primary_color;
-out vec2 texcoord[3];
-out float texcoord0_w;
-out vec4 normquat;
-out vec3 view;
+static std::string GetVertexInterfaceDeclaration(bool is_output, bool separable_shader) {
+    std::string out;
+
+    auto append_variable = [&](const char* var, int location) {
+        out += (separable_shader ? "layout (location=" + std::to_string(location) + ") "
+                                 : std::string{}) +
+               (is_output ? "out " : "in ") + var + ";\n";
+    };
+    append_variable("vec4 primary_color", ATTRIBUTE_COLOR);
+    append_variable("vec2 texcoord0", ATTRIBUTE_TEXCOORD0);
+    append_variable("vec2 texcoord1", ATTRIBUTE_TEXCOORD1);
+    append_variable("vec2 texcoord2", ATTRIBUTE_TEXCOORD2);
+    append_variable("float texcoord0_w", ATTRIBUTE_TEXCOORD0_W);
+    append_variable("vec4 normquat", ATTRIBUTE_NORMQUAT);
+    append_variable("vec3 view", ATTRIBUTE_VIEW);
+
+    if (is_output && separable_shader) {
+        out += R"(
+out gl_PerVertex {
+    vec4 gl_Position;
+    float gl_ClipDistance[2];
+};
 )";
+    }
+
+    return out;
+}
 
 PicaShaderConfig PicaShaderConfig::BuildFromRegs(const Pica::Regs& regs) {
     PicaShaderConfig res;
@@ -190,6 +211,66 @@ PicaShaderConfig PicaShaderConfig::BuildFromRegs(const Pica::Regs& regs) {
     return res;
 }
 
+PicaShaderConfigCommon::PicaShaderConfigCommon(const Pica::ShaderRegs& regs,
+                                               Pica::Shader::ShaderSetup& setup) {
+    program_hash = setup.GetProgramCodeHash();
+    swizzle_hash = setup.GetSwizzleDataHash();
+    main_offset = regs.main_offset;
+    sanitize_mul = Settings::values.shaders_accurate_mul;
+
+    num_outputs = 0;
+    output_map.fill(16);
+
+    for (u32 i = 0; i < 16; ++i) {
+        if ((regs.output_mask.Value() >> i) & 1) {
+            output_map[i] = num_outputs++;
+        }
+    }
+}
+
+PicaGSConfigCommon::PicaGSConfigCommon(const Pica::Regs& regs) {
+    vs_output_attributes = 0;
+    for (u32 i = 0; i < 16; ++i) {
+        if ((regs.vs.output_mask.Value() >> i) & 1) {
+            ++vs_output_attributes;
+        }
+    }
+    gs_output_attributes = vs_output_attributes;
+
+    semantic_maps.fill({16, 0});
+    for (u32 attrib = 0; attrib < regs.rasterizer.vs_output_total; ++attrib) {
+        std::array<Pica::RasterizerRegs::VSOutputAttributes::Semantic, 4> semantics = {
+            regs.rasterizer.vs_output_attributes[attrib].map_x,
+            regs.rasterizer.vs_output_attributes[attrib].map_y,
+            regs.rasterizer.vs_output_attributes[attrib].map_z,
+            regs.rasterizer.vs_output_attributes[attrib].map_w};
+        for (u32 comp = 0; comp < 4; ++comp) {
+            const auto semantic = semantics[comp];
+            if (semantic < 24) {
+                semantic_maps[static_cast<size_t>(semantic)] = {attrib, comp};
+            } else if (semantic != Pica::RasterizerRegs::VSOutputAttributes::INVALID) {
+                LOG_ERROR(Render_OpenGL, "Invalid/unknown semantic id: %u",
+                          static_cast<u32>(semantic));
+            }
+        }
+    }
+}
+
+PicaGSConfig::PicaGSConfig(const Pica::Regs& regs, Pica::Shader::ShaderSetup& setup)
+    : PicaShaderConfigCommon(regs.gs, setup), PicaGSConfigCommon(regs) {
+
+    num_inputs = regs.gs.max_input_attribute_index + 1;
+    input_map.fill(16);
+
+    for (u32 attr = 0; attr < num_inputs; ++attr) {
+        input_map[regs.gs.GetRegisterForAttribute(attr)] = attr;
+    }
+
+    attributes_per_vertex = regs.pipeline.vs_outmap_total_minus_1_a + 1;
+
+    gs_output_attributes = num_outputs;
+}
+
 /// Detects if a TEV stage is configured to be skipped (to avoid generating unnecessary code)
 static bool IsPassThroughTevStage(const TevStageConfig& stage) {
     return (stage.color_op == TevStageConfig::Operation::Replace &&
@@ -208,22 +289,22 @@ static std::string SampleTexture(const PicaShaderConfig& config, unsigned textur
         // Only unit 0 respects the texturing type
         switch (state.texture0_type) {
         case TexturingRegs::TextureConfig::Texture2D:
-            return "texture(tex[0], texcoord[0])";
+            return "texture(tex0, texcoord0)";
         case TexturingRegs::TextureConfig::Projection2D:
-            return "textureProj(tex[0], vec3(texcoord[0], texcoord0_w))";
+            return "textureProj(tex0, vec3(texcoord0, texcoord0_w))";
         default:
             LOG_CRITICAL(HW_GPU, "Unhandled texture type %x",
                          static_cast<int>(state.texture0_type));
             UNIMPLEMENTED();
-            return "texture(tex[0], texcoord[0])";
+            return "texture(tex0, texcoord0)";
         }
     case 1:
-        return "texture(tex[1], texcoord[1])";
+        return "texture(tex1, texcoord1)";
     case 2:
         if (state.texture2_use_coord1)
-            return "texture(tex[2], texcoord[1])";
+            return "texture(tex2, texcoord1)";
         else
-            return "texture(tex[2], texcoord[2])";
+            return "texture(tex2, texcoord2)";
     case 3:
         if (state.proctex.enable) {
             return "ProcTex()";
@@ -987,7 +1068,12 @@ float ProcTexNoiseCoef(vec2 x) {
     }
 
     out += "vec4 ProcTex() {\n";
-    out += "vec2 uv = abs(texcoord[" + std::to_string(config.state.proctex.coord) + "]);\n";
+    if (config.state.proctex.coord < 3) {
+        out += "vec2 uv = abs(texcoord" + std::to_string(config.state.proctex.coord) + ");\n";
+    } else {
+        LOG_CRITICAL(Render_OpenGL, "proctex.coord == 3");
+        out += "vec2 uv = abs(texcoord0);\n";
+    }
 
     // Get shift offset before noise generation
     out += "float u_shift = ";
@@ -1052,23 +1138,24 @@ float ProcTexNoiseCoef(vec2 x) {
     }
 }
 
-std::string GenerateFragmentShader(const PicaShaderConfig& config) {
+std::string GenerateFragmentShader(const PicaShaderConfig& config, bool separable_shader) {
     const auto& state = config.state;
 
-    std::string out = R"(
-#version 330 core
+    std::string out = "#version 330 core\n";
+    if (separable_shader) {
+        out += "#extension GL_ARB_separate_shader_objects : enable\n\n";
+    }
 
-in vec4 primary_color;
-in vec2 texcoord[3];
-in float texcoord0_w;
-in vec4 normquat;
-in vec3 view;
+    out += GetVertexInterfaceDeclaration(false, separable_shader);
 
+    out += R"(
 in vec4 gl_FragCoord;
 
 out vec4 color;
 
-uniform sampler2D tex[3];
+uniform sampler2D tex0;
+uniform sampler2D tex1;
+uniform sampler2D tex2;
 uniform samplerBuffer lighting_lut;
 uniform samplerBuffer fog_lut;
 uniform samplerBuffer proctex_noise_lut;
@@ -1195,8 +1282,13 @@ vec4 secondary_fragment_color = vec4(0.0);
     return out;
 }
 
-std::string GenerateDefaultVertexShader() {
+std::string GenerateDefaultVertexShader(bool separable_shader) {
     std::string out = "#version 330 core\n";
+    if (separable_shader) {
+        out += "#extension GL_ARB_separate_shader_objects : enable\n\n";
+    }
+
+    out += GetVertexInterfaceDeclaration(true, separable_shader);
 
     out += "layout(location = " + std::to_string((int)ATTRIBUTE_POSITION) +
            ") in vec4 vert_position;\n";
@@ -1213,17 +1305,14 @@ std::string GenerateDefaultVertexShader() {
            ") in vec4 vert_normquat;\n";
     out += "layout(location = " + std::to_string((int)ATTRIBUTE_VIEW) + ") in vec3 vert_view;\n";
 
-    out += VertexOutputDef + "\n";
-
     out += UniformBlockDef;
 
     out += R"(
-
 void main() {
     primary_color = vert_color;
-    texcoord[0] = vert_texcoord0;
-    texcoord[1] = vert_texcoord1;
-    texcoord[2] = vert_texcoord2;
+    texcoord0 = vert_texcoord0;
+    texcoord1 = vert_texcoord1;
+    texcoord2 = vert_texcoord2;
     texcoord0_w = vert_texcoord0_w;
     normquat = vert_normquat;
     view = vert_view;
@@ -1236,198 +1325,200 @@ void main() {
     return out;
 }
 
-std::string GenerateVertexShader(
-    const std::array<u32, Pica::Shader::MAX_PROGRAM_CODE_LENGTH>& program_code,
-    const std::array<u32, Pica::Shader::MAX_SWIZZLE_DATA_LENGTH>& swizzle_data, u32 main_offset) {
+std::string GenerateVertexShader(const Pica::Shader::ShaderSetup& setup,
+                                 const PicaVSConfig& config) {
     std::string out = "#version 330 core\n";
+    out += "#extension GL_ARB_separate_shader_objects : enable\n\n";
 
     out += Pica::Shader::Decompiler::GetCommonDeclarations();
 
+    std::array<bool, 16> used_regs{};
+    auto get_input_reg = [&](u32 reg) -> std::string {
+        ASSERT(reg < 16);
+        used_regs[reg] = true;
+        return "vs_in_reg" + std::to_string(reg);
+    };
+
+    auto get_output_reg = [&](u32 reg) -> std::string {
+        ASSERT(reg < 16);
+        if (config.output_map[reg] < config.num_outputs) {
+            return "vs_out_attr" + std::to_string(config.output_map[reg]);
+        }
+        return "";
+    };
+
+    std::string program_source = Pica::Shader::Decompiler::DecompileProgram(
+        setup.program_code, setup.swizzle_data, config.main_offset, get_input_reg, get_output_reg,
+        config.sanitize_mul);
+
     out += R"(
 layout (std140) uniform vs_config {
-    uvec4 input_maps[4];
-    uvec4 output_maps[4];
     pica_uniforms uniforms;
 };
 
-
-struct OutputAttributes {
-    vec4 attributes[16];
-};
-
-layout (location=0) in vec4 input_attributes[16];
-out OutputAttributes output_attributes;
-
-void main() {
 )";
-    // input attributes -> input registers
-    for (int i = 15; i >= 0; --i) {
-        out += "    regs.i[input_maps[" + std::to_string(i / 4) + "]." + "xyzw"[i % 4] +
-               "] = input_attributes[" + std::to_string(i) + "];\n";
+    // input attributes declaration
+    for (u32 i = 0; i < 16; ++i) {
+        if (used_regs[i]) {
+            out += "layout(location = " + std::to_string(i) + ") in vec4 vs_in_reg" +
+                   std::to_string(i) + ";\n";
+        }
+    }
+    out += "\n";
+
+    // output attributes declaration
+    for (u32 i = 0; i < config.num_outputs; ++i) {
+        out += "layout(location = " + std::to_string(i) + ") out vec4 vs_out_attr" +
+               std::to_string(i) + ";\n";
     }
 
-    // execute shader
-    out += "\n    exec_shader();\n\n";
+    out += R"(
+void main() {
+    exec_shader();
+}
 
-    // output registers -> output attributes
-    for (int i = 0; i < 16; ++i) {
-        out += "    output_attributes.attributes[output_maps[" + std::to_string(i / 4) + "]." +
-               "xyzw"[i % 4] + "] = regs.o[" + std::to_string(i) + "];\n";
-    }
+)";
 
-    out += "}\n\n";
-
-    out += Pica::Shader::Decompiler::DecompileProgram(program_code, swizzle_data, main_offset);
+    out += program_source;
 
     return out;
 }
 
-static std::string GSAttributesToVertexDef() {
-    std::string out = "void AttributesToVertex(vec4 attributes[8], out Vertex outvtx) {\n";
+static std::string GetGSCommonSource(const PicaGSConfigCommon& config) {
+    std::string out = GetVertexInterfaceDeclaration(true, true);
+    out += UniformBlockDef;
+    out += Pica::Shader::Decompiler::GetCommonDeclarations();
 
-    const struct {
-        std::string name;
-        std::string array_pos;
-        std::string vec_pos;
-    } semantic_map[] = {{"position.x", "[0].x", "[0].y"},
-                        {"position.y", "[0].z", "[0].w"},
-                        {"position.z", "[1].x", "[1].y"},
-                        {"position.w", "[1].z", "[1].w"},
-                        {"normquat.x", "[2].x", "[2].y"},
-                        {"normquat.y", "[2].z", "[2].w"},
-                        {"normquat.z", "[3].x", "[3].y"},
-                        {"normquat.w", "[3].z", "[3].w"},
-                        {"color.x", "[4].x", "[4].y"},
-                        {"color.y", "[4].z", "[4].w"},
-                        {"color.z", "[5].x", "[5].y"},
-                        {"color.w", "[5].z", "[5].w"},
-                        {"texcoord[0].x", "[6].x", "[6].y"},
-                        {"texcoord[0].y", "[6].z", "[6].w"},
-                        {"texcoord[1].x", "[7].x", "[7].y"},
-                        {"texcoord[1].y", "[7].z", "[7].w"},
-                        {"texcoord0_w", "[8].x", "[8].y"},
-                        // PADDING
-                        {"view.x", "[9].x", "[9].y"},
-                        {"view.y", "[9].z", "[9].w"},
-                        {"view.z", "[10].x", "[10].y"},
-                        // PADDING
-                        {"texcoord[2].x", "[11].x", "[11].y"},
-                        {"texcoord[2].y", "[11].z", "[11].w"}};
-    for (auto& semantic : semantic_map) {
-        out += "    outvtx." + semantic.name + " = attributes[semantic_map" + semantic.array_pos +
-               "][semantic_map" + semantic.vec_pos + "];\n";
-    };
-    out += "\n    outvtx.color = min(abs(outvtx.color), 1.0f);\n}\n";
+    out += '\n';
+    for (u32 i = 0; i < config.vs_output_attributes; ++i) {
+        out += "layout(location = " + std::to_string(i) + ") in vec4 vs_out_attr" +
+               std::to_string(i) + "[];\n";
+    }
 
-    return out;
-}
-
-static const std::string GSCommonSource = "#version 330 core\n" + VertexOutputDef + "\n" +
-                                          UniformBlockDef +
-                                          Pica::Shader::Decompiler::GetCommonDeclarations() + R"(
+    out += R"(
 layout (std140) uniform gs_config {
-    uvec4 semantic_map[12];
-    uint vs_output_num;
-    uvec4 input_maps[4];
-    uvec4 output_maps[4];
     pica_uniforms uniforms;
 };
-
-layout(triangle_strip, max_vertices = 3) out;
-
-struct OutputAttributes {
-    vec4 attributes[16];
-};
-in OutputAttributes output_attributes[];
 
 struct Vertex {
-    vec4 position;
-    vec4 color;
-    vec2 texcoord[3];
-    float texcoord0_w;
-    vec4 normquat;
-    vec3 view;
-};
+)";
+    out += "    vec4 attributes[" + std::to_string(config.gs_output_attributes) + "];\n";
+    out += "};\n\n";
 
-void EmitVtx(Vertex vtx) {
-    primary_color = vtx.color;
-    texcoord[0] = vtx.texcoord[0];
-    texcoord[1] = vtx.texcoord[1];
-    texcoord[2] = vtx.texcoord[2];
-    texcoord0_w = vtx.texcoord0_w;
-    normquat = vtx.normquat;
-    view = vtx.view;
-    gl_Position = vtx.position;
-    gl_ClipDistance[0] = -vtx.position.z; // fixed PICA clipping plane z <= 0
-    gl_ClipDistance[1] = dot(clip_coef, vtx.position);
+    auto get_vertex_semantic = [&](const std::string& vertex_name, u32 slot) -> std::string {
+        u32 attrib = config.semantic_maps[slot].first;
+        u32 comp = config.semantic_maps[slot].second;
+        if (attrib < config.gs_output_attributes) {
+            return vertex_name + ".attributes[" + std::to_string(attrib) + "]." + "xyzw"[comp % 4];
+        }
+        return "0.0";
+    };
 
-    EmitVertex();
-}
+    out += "vec4 GetVertexQuaternion(Vertex vtx) {\n";
+    out += "    return vec4(" +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::QUATERNION_X) + ", " +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::QUATERNION_Y) + ", " +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::QUATERNION_Z) + ", " +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::QUATERNION_W) + ");\n";
+    out += "}\n\n";
 
+    out += "void EmitVtx(Vertex vtx, bool quats_opposite) {\n";
+    out += "    vec4 vtx_pos = vec4(" +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::POSITION_X) + ", " +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::POSITION_Y) + ", " +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::POSITION_Z) + ", " +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::POSITION_W) + ");\n";
+    out += "    gl_Position = vtx_pos;\n";
+    out += "    gl_ClipDistance[0] = -vtx_pos.z;\n"; // fixed PICA clipping plane z <= 0
+    out += "    gl_ClipDistance[1] = dot(clip_coef, vtx_pos);\n\n";
+
+    out += "    vec4 vtx_quat = GetVertexQuaternion(vtx);\n";
+    out += "    normquat = mix(vtx_quat, -vtx_quat, bvec4(quats_opposite));\n\n";
+
+    out += "    vec4 vtx_color = vec4(" +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::COLOR_R) + ", " +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::COLOR_G) + ", " +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::COLOR_B) + ", " +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::COLOR_A) + ");\n";
+    out += "    primary_color = min(abs(vtx_color), vec4(1.0));\n\n";
+
+    out += "    texcoord0 = vec2(" +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::TEXCOORD0_U) + ", " +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::TEXCOORD0_V) + ");\n";
+    out += "    texcoord1 = vec2(" +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::TEXCOORD1_U) + ", " +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::TEXCOORD1_V) + ");\n\n";
+
+    out += "    texcoord0_w = " +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::TEXCOORD0_W) + ";\n";
+    out += "    view = vec3(" +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::VIEW_X) + ", " +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::VIEW_Y) + ", " +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::VIEW_Z) + ");\n\n";
+
+    out += "    texcoord2 = vec2(" +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::TEXCOORD2_U) + ", " +
+           get_vertex_semantic("vtx", RasterizerRegs::VSOutputAttributes::TEXCOORD2_V) + ");\n\n";
+
+    out += "    EmitVertex();\n";
+    out += "}\n";
+
+    out += R"(
 bool AreQuaternionsOpposite(vec4 qa, vec4 qb) {
     return (dot(qa, qb) < 0.0);
 }
 
 void EmitPrim(Vertex vtx0, Vertex vtx1, Vertex vtx2) {
-    EmitVtx(vtx0);
-
-    vtx1.normquat = mix(vtx1.normquat, -vtx1.normquat,
-                        AreQuaternionsOpposite(vtx0.normquat, vtx1.normquat));
-    EmitVtx(vtx1);
-
-    vtx2.normquat = mix(vtx2.normquat, -vtx2.normquat,
-                        AreQuaternionsOpposite(vtx0.normquat, vtx2.normquat));
-    EmitVtx(vtx2);
-
+    EmitVtx(vtx0, false);
+    EmitVtx(vtx1, AreQuaternionsOpposite(GetVertexQuaternion(vtx0), GetVertexQuaternion(vtx1)));
+    EmitVtx(vtx2, AreQuaternionsOpposite(GetVertexQuaternion(vtx0), GetVertexQuaternion(vtx2)));
     EndPrimitive();
 }
+)";
 
-)" + GSAttributesToVertexDef();
+    return out;
+};
 
-std::string GenerateDefaultGeometryShader() {
-    std::string out = GSCommonSource;
-    out += R"(
+std::string GenerateDefaultGeometryShader(const PicaGSConfigCommon& config) {
+    std::string out = R"(
+#version 330 core
+#extension GL_ARB_separate_shader_objects : enable
+
 layout(triangles) in;
+layout(triangle_strip, max_vertices = 3) out;
 
+)";
+
+    out += GetGSCommonSource(config);
+
+    out += R"(
 void main() {
     Vertex prim_buffer[3];
-    AttributesToVertex(vec4[8](output_attributes[0].attributes[0],
-                               output_attributes[0].attributes[1],
-                               output_attributes[0].attributes[2],
-                               output_attributes[0].attributes[3],
-                               output_attributes[0].attributes[4],
-                               output_attributes[0].attributes[5],
-                               output_attributes[0].attributes[6],
-                               vec4(0.f)), prim_buffer[0]);
-    AttributesToVertex(vec4[8](output_attributes[1].attributes[0],
-                               output_attributes[1].attributes[1],
-                               output_attributes[1].attributes[2],
-                               output_attributes[1].attributes[3],
-                               output_attributes[1].attributes[4],
-                               output_attributes[1].attributes[5],
-                               output_attributes[1].attributes[6],
-                               vec4(0.f)), prim_buffer[1]);
-    AttributesToVertex(vec4[8](output_attributes[2].attributes[0],
-                               output_attributes[2].attributes[1],
-                               output_attributes[2].attributes[2],
-                               output_attributes[2].attributes[3],
-                               output_attributes[2].attributes[4],
-                               output_attributes[2].attributes[5],
-                               output_attributes[2].attributes[6],
-                               vec4(0.f)), prim_buffer[2]);
-    EmitPrim(prim_buffer[0], prim_buffer[1], prim_buffer[2]);
-}
 )";
+    for (u32 vtx = 0; vtx < 3; ++vtx) {
+        out += "    prim_buffer[" + std::to_string(vtx) + "].attributes = vec4[" +
+               std::to_string(config.gs_output_attributes) + "](";
+        for (u32 i = 0; i < config.vs_output_attributes; ++i) {
+            out += std::string(i == 0 ? "" : ", ") + "vs_out_attr" + std::to_string(i) + "[" +
+                   std::to_string(vtx) + "]";
+        }
+        out += ");\n";
+    }
+    out += "    EmitPrim(prim_buffer[0], prim_buffer[1], prim_buffer[2]);\n";
+    out += "}\n";
+
     return out;
 }
 
-std::string GenerateGeometryShader(
-    const std::array<u32, Pica::Shader::MAX_PROGRAM_CODE_LENGTH>& program_code,
-    const std::array<u32, Pica::Shader::MAX_SWIZZLE_DATA_LENGTH>& swizzle_data, u32 main_offset,
-    u32 vertex_count) {
-    std::string out = GSCommonSource;
+std::string GenerateGeometryShader(const Pica::Shader::ShaderSetup& setup,
+                                   const PicaGSConfig& config) {
+    std::string out = R"(
+#version 330 core
+#extension GL_ARB_separate_shader_objects : enable
 
-    switch (vertex_count) {
+)";
+
+    switch (config.num_inputs / config.attributes_per_vertex) {
     case 1:
         out += "layout(points) in;\n";
         break;
@@ -1446,8 +1537,34 @@ std::string GenerateGeometryShader(
     default:
         UNREACHABLE();
     }
+    out += "layout(triangle_strip, max_vertices = 30) out;\n\n";
+
+    out += GetGSCommonSource(config);
+
+    auto get_input_reg = [&](u32 reg) -> std::string {
+        ASSERT(reg < 16);
+        u32 attr = config.input_map[reg];
+        if (attr < config.num_inputs) {
+            return "vs_out_attr" + std::to_string(attr % config.attributes_per_vertex) + "[" +
+                   std::to_string(attr / config.attributes_per_vertex) + "]";
+        }
+        return "vec4(0.0, 0.0, 0.0, 1.0)";
+    };
+
+    auto get_output_reg = [&](u32 reg) -> std::string {
+        ASSERT(reg < 16);
+        if (config.output_map[reg] < config.num_outputs) {
+            return "output_buffer.attributes[" + std::to_string(config.output_map[reg]) + "]";
+        }
+        return "";
+    };
+
+    std::string program_source = Pica::Shader::Decompiler::DecompileProgram(
+        setup.program_code, setup.swizzle_data, config.main_offset, get_input_reg, get_output_reg,
+        config.sanitize_mul, "emit_cb", "setemit_cb");
 
     out += R"(
+Vertex output_buffer;
 Vertex prim_buffer[3];
 uint vertex_id = 0u;
 bool prim_emit = false;
@@ -1460,17 +1577,8 @@ void setemit_cb(uint vertex_id_, bool prim_emit_, bool winding_) {
 }
 
 void emit_cb() {
-    vec4 gs_out_attributes[16];
-)";
-    // output registers -> output attributes
-    for (int i = 0; i < 16; ++i) {
-        out += "    gs_out_attributes[output_maps[" + std::to_string(i / 4) + "]." +
-            "xyzw"[i % 4] + "] = regs.o[" + std::to_string(i) + "];\n";
-    }
-    out += R"(
-    AttributesToVertex(vec4[8](gs_out_attributes[0], gs_out_attributes[1], gs_out_attributes[2],
-                               gs_out_attributes[3], gs_out_attributes[4], gs_out_attributes[5],
-                               gs_out_attributes[6], vec4(0.f)), prim_buffer[vertex_id]);
+    prim_buffer[vertex_id] = output_buffer;
+
     if (prim_emit) {
         if (winding) {
             EmitPrim(prim_buffer[1], prim_buffer[0], prim_buffer[2]);
@@ -1480,32 +1588,16 @@ void emit_cb() {
         }
     }
 }
+
+void main() {
 )";
-
-    out += "\nvoid main() {\n";
-
-    // vs output attributes -> gs input attributes
-    out += "    vec4 gs_in_attributes[16];\n";
-    out += "    uint gs_in_pos = 0u;\n";
-    for (u32 vtx = 0; vtx < vertex_count; ++vtx) {
-        out += "    for (uint i = 0u; i < vs_output_num; ++i) { gs_in_attributes[gs_in_pos++] = "
-               "output_attributes[" +
-               std::to_string(vtx) + "].attributes[i]; };\n";
-    }
-    out += "\n";
-
-    // gs input attributes -> input registers
-    for (int i = 15; i >= 0; --i) {
-        out += "    regs.i[input_maps[" + std::to_string(i / 4) + "]." + "xyzw"[i % 4] +
-               "] = gs_in_attributes[" + std::to_string(i) + "];\n";
-    }
 
     // execute shader
     out += "\n    exec_shader();\n\n";
 
     out += "}\n\n";
 
-    out += Pica::Shader::Decompiler::DecompileProgram(program_code, swizzle_data, main_offset, "emit_cb", "setemit_cb");
+    out += program_source;
 
     return out;
 }
