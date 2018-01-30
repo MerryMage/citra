@@ -34,6 +34,30 @@ MICROPROFILE_DEFINE(OpenGL_Drawing, "OpenGL", "Drawing", MP_RGB(128, 128, 192));
 MICROPROFILE_DEFINE(OpenGL_Blits, "OpenGL", "Blits", MP_RGB(100, 100, 255));
 MICROPROFILE_DEFINE(OpenGL_CacheManagement, "OpenGL", "Cache Mgmt", MP_RGB(100, 255, 100));
 
+enum class UniformBindings : GLuint { Common, VS, GS };
+
+static void SetShaderUniformBlockBinding(GLuint shader, const char* name, UniformBindings binding,
+                                         size_t expected_size) {
+    GLuint ub_index = glGetUniformBlockIndex(shader, name);
+    if (ub_index != GL_INVALID_INDEX) {
+        GLint ub_size = 0;
+        glGetActiveUniformBlockiv(shader, ub_index, GL_UNIFORM_BLOCK_DATA_SIZE, &ub_size);
+        ASSERT_MSG(ub_size == expected_size,
+                   "Uniform block size did not match! Got %d, expected %zu",
+                   static_cast<int>(ub_size), expected_size);
+        glUniformBlockBinding(shader, ub_index, static_cast<GLuint>(binding));
+    }
+}
+
+static void SetShaderUniformBlockBindings(GLuint shader) {
+    SetShaderUniformBlockBinding(shader, "shader_data", UniformBindings::Common,
+                                 sizeof(RasterizerOpenGL::UniformData));
+    SetShaderUniformBlockBinding(shader, "vs_config", UniformBindings::VS,
+                                 sizeof(RasterizerOpenGL::VSUniformData));
+    SetShaderUniformBlockBinding(shader, "gs_config", UniformBindings::GS,
+                                 sizeof(RasterizerOpenGL::GSUniformData));
+}
+
 RasterizerOpenGL::RasterizerOpenGL() : shader_dirty(true) {
     separate_shaders_ext_supported = false;
     GLint ext_num;
@@ -65,6 +89,7 @@ RasterizerOpenGL::RasterizerOpenGL() : shader_dirty(true) {
     state.Apply();
 
     // Bind the UBO to binding point 0
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(UniformData), nullptr, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buffer.handle);
 
     uniform_block_data.dirty = true;
@@ -186,29 +211,33 @@ RasterizerOpenGL::RasterizerOpenGL() : shader_dirty(true) {
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, proctex_diff_lut_buffer.handle);
 
     if (separate_shaders_ext_supported) {
-        pipeline.Create();
         hw_vao.Create();
-        pipeline_index_offset = 0;
+        hw_vao_enabled_attributes.fill(false);
+
+        pipeline.Create();
+        vs_input_index_start = 0;
+        vs_input_index_end = 0;
         state.draw.program_pipeline = pipeline.handle;
+        state.draw.shader_program = 0;
 
         vs_input_buffer.Create();
         vs_input_buffer_size = 0;
 
         vs_uniform.Create();
-        glBindBufferBase(GL_UNIFORM_BUFFER, 1, vs_uniform.handle);
+        state.draw.uniform_buffer = vs_uniform.handle;
+        state.Apply();
         glBufferData(GL_UNIFORM_BUFFER, sizeof(VSUniformData), nullptr, GL_STREAM_DRAW);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 1, vs_uniform.handle);
 
         gs_uniform.Create();
-        glBindBufferBase(GL_UNIFORM_BUFFER, 2, gs_uniform.handle);
-        glBufferData(GL_UNIFORM_BUFFER, sizeof(GSUniformData), nullptr, GL_STREAM_DRAW);
-
         state.draw.uniform_buffer = gs_uniform.handle;
         state.Apply();
-        state.draw.uniform_buffer = uniform_buffer.handle;
-        state.Apply();
+        glBufferData(GL_UNIFORM_BUFFER, sizeof(GSUniformData), nullptr, GL_STREAM_DRAW);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 2, gs_uniform.handle);
 
-        vs_default_shader.Create(GLShader::GenerateDefaultVertexShader().c_str(), nullptr, nullptr, {}, true);
-        gs_default_shader.handle = CompileGeometryShader(GLShader::GenerateDefaultGeometryShader());
+        vs_default_shader.Create(GLShader::GenerateDefaultVertexShader(true).c_str(), nullptr,
+                                 nullptr, {}, true);
+        SetShaderUniformBlockBindings(vs_default_shader.handle);
     }
 
     accelerate_draw = AccelDraw::Disabled;
@@ -272,20 +301,6 @@ static constexpr std::array<GLenum, 4> vs_attrib_types{
     GL_FLOAT          // VertexAttributeFormat::FLOAT
 };
 
-GLuint RasterizerOpenGL::CompileVertexShader(const std::string& source) {
-    GLuint out_shader = GLShader::LoadProgram(source.c_str(), nullptr, nullptr, {}, true);
-
-    GLuint ub_index = glGetUniformBlockIndex(out_shader, "vs_config");
-    GLint ub_size = 0;
-    glGetActiveUniformBlockiv(out_shader, ub_index, GL_UNIFORM_BLOCK_DATA_SIZE, &ub_size);
-    ASSERT_MSG(ub_size == sizeof(VSUniformData),
-        "Uniform block size did not match! Got %d, expected %zu",
-        static_cast<int>(ub_size), sizeof(VSUniformData));
-    glUniformBlockBinding(out_shader, ub_index, 1);
-
-    return out_shader;
-}
-
 void RasterizerOpenGL::SetupVertexShader(bool is_indexed) {
     MICROPROFILE_SCOPE(OpenGL_VS);
     const auto& regs = Pica::g_state.regs;
@@ -314,7 +329,8 @@ void RasterizerOpenGL::SetupVertexShader(bool is_indexed) {
         }
     }
     u32 vertex_num = vertex_max - vertex_min + 1;
-    pipeline_index_offset = vertex_min;
+    vs_input_index_start = vertex_min;
+    vs_input_index_end = vertex_max;
 
     state.draw.uniform_buffer = vs_uniform.handle;
     state.draw.vertex_array = hw_vao.handle;
@@ -322,7 +338,7 @@ void RasterizerOpenGL::SetupVertexShader(bool is_indexed) {
     state.Apply();
 
     GLsizeiptr vs_input_size = 0;
-    for (auto &loader : vertex_attributes.attribute_loaders) {
+    for (auto& loader : vertex_attributes.attribute_loaders) {
         if (loader.component_count) {
             vs_input_size += loader.byte_count * vertex_num;
         }
@@ -333,15 +349,16 @@ void RasterizerOpenGL::SetupVertexShader(bool is_indexed) {
         glBufferData(GL_ARRAY_BUFFER, vs_input_buffer_size, nullptr, GL_STREAM_DRAW);
     }
 
-    for (GLuint i = 0; i < 16; ++i) {
-        glDisableVertexAttribArray(i);
-        if (static_cast<int>(i) < vertex_attributes.GetNumTotalAttributes() &&
-            vertex_attributes.IsDefaultAttribute(static_cast<int>(i))) {
-            glVertexAttrib4f(i,
-                Pica::g_state.input_default_attributes.attr[i].x.ToFloat32(),
-                Pica::g_state.input_default_attributes.attr[i].y.ToFloat32(),
-                Pica::g_state.input_default_attributes.attr[i].z.ToFloat32(),
-                Pica::g_state.input_default_attributes.attr[i].w.ToFloat32());
+    std::array<bool, 16> enable_attributes{};
+    ASSERT(vertex_attributes.GetNumTotalAttributes() < 16);
+
+    for (int i = 0; i < vertex_attributes.GetNumTotalAttributes(); ++i) {
+        if (vertex_attributes.IsDefaultAttribute(i)) {
+            glVertexAttrib4f(regs.vs.GetRegisterForAttribute(static_cast<u32>(i)),
+                             Pica::g_state.input_default_attributes.attr[i].x.ToFloat32(),
+                             Pica::g_state.input_default_attributes.attr[i].y.ToFloat32(),
+                             Pica::g_state.input_default_attributes.attr[i].z.ToFloat32(),
+                             Pica::g_state.input_default_attributes.attr[i].w.ToFloat32());
         }
     }
 
@@ -358,16 +375,18 @@ void RasterizerOpenGL::SetupVertexShader(bool is_indexed) {
             int attribute_index = loader.GetComponent(comp);
             if (attribute_index < 12) {
                 offset = Common::AlignUp(offset,
-                    vertex_attributes.GetElementSizeInBytes(attribute_index));
+                                         vertex_attributes.GetElementSizeInBytes(attribute_index));
 
                 if (!vertex_attributes.IsDefaultAttribute(attribute_index)) {
-                        glVertexAttribPointer(static_cast<GLuint>(attribute_index),
-                            vertex_attributes.GetNumElements(attribute_index),
-                            vs_attrib_types[static_cast<size_t>(vertex_attributes.GetFormat(attribute_index))],
-                            GL_FALSE,
-                            static_cast<GLsizei>(loader.byte_count),
-                            reinterpret_cast<GLvoid*>(buffer_offset + offset));
-                    glEnableVertexAttribArray(static_cast<GLuint>(attribute_index));
+                    u32 input_reg =
+                        regs.vs.GetRegisterForAttribute(static_cast<u32>(attribute_index));
+                    glVertexAttribPointer(input_reg,
+                                          vertex_attributes.GetNumElements(attribute_index),
+                                          vs_attrib_types[static_cast<size_t>(
+                                              vertex_attributes.GetFormat(attribute_index))],
+                                          GL_FALSE, static_cast<GLsizei>(loader.byte_count),
+                                          reinterpret_cast<GLvoid*>(buffer_offset + offset));
+                    enable_attributes[input_reg] = true;
                 }
 
                 offset += vertex_attributes.GetStride(attribute_index);
@@ -379,26 +398,28 @@ void RasterizerOpenGL::SetupVertexShader(bool is_indexed) {
             }
         }
 
-        PAddr data_addr = vertex_attributes.GetPhysicalBaseAddress() +
-            loader.data_offset +
-            (vertex_min * loader.byte_count);
+        PAddr data_addr = vertex_attributes.GetPhysicalBaseAddress() + loader.data_offset +
+                          (vertex_min * loader.byte_count);
         u32 data_size = loader.byte_count * vertex_num;
 
         // TODO: cache this too
         res_cache.FlushRegion(data_addr, data_size, nullptr);
-        glBufferSubData(GL_ARRAY_BUFFER, buffer_offset,
-            data_size, Memory::GetPhysicalPointer(data_addr));
+        glBufferSubData(GL_ARRAY_BUFFER, buffer_offset, data_size,
+                        Memory::GetPhysicalPointer(data_addr));
 
         buffer_offset += data_size;
     }
 
-    u32 output_i = 0;
     for (u32 i = 0; i < 16; ++i) {
-        vs_uniform_data.input_maps[i / 4][i % 4] = regs.vs.GetRegisterForAttribute(i);
-        vs_uniform_data.output_maps[i / 4][i % 4] =
-            ((regs.vs.output_mask.Value() >> i) & 1) ? output_i++ : 15;
-        vs_uniform_data.uniforms.b[i / 4][i % 4] =
-            Pica::g_state.vs.uniforms.b[i] ? GL_TRUE : GL_FALSE;
+        if (enable_attributes[i] != hw_vao_enabled_attributes[i]) {
+            if (enable_attributes[i]) {
+                glEnableVertexAttribArray(i);
+            } else {
+                glDisableVertexAttribArray(i);
+            }
+            hw_vao_enabled_attributes[i] = enable_attributes[i];
+        }
+        vs_uniform_data.uniforms.bools[i].b = Pica::g_state.vs.uniforms.b[i] ? GL_TRUE : GL_FALSE;
     }
     for (int i = 0; i < 4; ++i) {
         vs_uniform_data.uniforms.i[i][0] = regs.vs.int_uniforms[i].x;
@@ -406,31 +427,26 @@ void RasterizerOpenGL::SetupVertexShader(bool is_indexed) {
         vs_uniform_data.uniforms.i[i][2] = regs.vs.int_uniforms[i].z;
         vs_uniform_data.uniforms.i[i][3] = regs.vs.int_uniforms[i].w;
     }
-    glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(VSUniformData) - sizeof(VSUniformData::uniforms.f), &vs_uniform_data);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(VSUniformData) - sizeof(VSUniformData::uniforms.f),
+                    &vs_uniform_data);
     glBufferSubData(GL_UNIFORM_BUFFER, offsetof(VSUniformData, VSUniformData::uniforms.f),
                     sizeof(VSUniformData::uniforms.f), &Pica::g_state.vs.uniforms.f[0]);
 
-    std::array<u64, 4> hashes;
-    hashes[0] = Pica::g_state.vs.GetProgramCodeHash();
-    hashes[1] = Pica::g_state.vs.GetSwizzleDataHash();
-    hashes[2] = regs.vs.main_offset;
-    hashes[3] = 0; // padding
-    u64 cache_key = Common::ComputeHash64(&hashes[0], hashes.size() * sizeof(u64));
-
     GLuint shader;
+    const GLShader::PicaVSConfig vs_config(regs, Pica::g_state.vs);
 
-    auto map_it = vs_shader_map.find(cache_key);
+    auto map_it = vs_shader_map.find(vs_config);
     if (map_it == vs_shader_map.end()) {
-        std::string vs_program = GLShader::GenerateVertexShader(
-            Pica::g_state.vs.program_code, Pica::g_state.vs.swizzle_data, regs.vs.main_offset);
+        std::string vs_program = GLShader::GenerateVertexShader(Pica::g_state.vs, vs_config);
 
-        auto shader_it = vs_shader_cache.find(vs_program);
-        if (shader_it == vs_shader_cache.end()) {
-            shader_it = vs_shader_cache.emplace(vs_program, VertexShader{}).first;
-            shader_it->second.shader.handle = CompileVertexShader(vs_program);
+        VertexShader& cached_shader = vs_shader_cache[vs_program];
+        if (cached_shader.shader.handle == 0) {
+            cached_shader.shader.handle =
+                GLShader::LoadProgram(vs_program.c_str(), nullptr, nullptr, {}, true);
+            SetShaderUniformBlockBindings(cached_shader.shader.handle);
         }
-        vs_shader_map[cache_key] = &shader_it->second;
-        shader = shader_it->second.shader.handle;
+        vs_shader_map[vs_config] = &cached_shader;
+        shader = cached_shader.shader.handle;
     } else {
         shader = map_it->second->shader.handle;
     }
@@ -438,77 +454,28 @@ void RasterizerOpenGL::SetupVertexShader(bool is_indexed) {
     glUseProgramStages(pipeline.handle, GL_VERTEX_SHADER_BIT, shader);
 }
 
-GLuint RasterizerOpenGL::CompileGeometryShader(const std::string& source) {
-    GLuint out_shader = GLShader::LoadProgram(nullptr, source.c_str(), nullptr, {}, true);
-
-    GLuint ub_index;
-    GLint ub_size;
-
-    ub_index = glGetUniformBlockIndex(out_shader, "shader_data");
-    glGetActiveUniformBlockiv(out_shader, ub_index, GL_UNIFORM_BLOCK_DATA_SIZE, &ub_size);
-    ASSERT_MSG(ub_size == sizeof(UniformData),
-               "Uniform block size did not match! Got %d, expected %zu",
-               static_cast<int>(ub_size), sizeof(UniformData));
-    glUniformBlockBinding(out_shader, ub_index, 0);
-
-    ub_index = glGetUniformBlockIndex(out_shader, "gs_config");
-    glGetActiveUniformBlockiv(out_shader, ub_index, GL_UNIFORM_BLOCK_DATA_SIZE, &ub_size);
-    ASSERT_MSG(ub_size == sizeof(GSUniformData),
-               "Uniform block size did not match! Got %d, expected %zu", static_cast<int>(ub_size),
-               sizeof(GSUniformData));
-    glUniformBlockBinding(out_shader, ub_index, 2);
-
-    return out_shader;
-}
-
 void RasterizerOpenGL::SetupGeometryShader() {
     MICROPROFILE_SCOPE(OpenGL_GS);
     const auto& regs = Pica::g_state.regs;
 
-    state.draw.uniform_buffer = gs_uniform.handle;
-    state.Apply();
-
-    for (auto& semantic : gs_uniform_data.semantic_map) {
-        semantic[0] = semantic[2] = 7;
-        semantic[1] = semantic[3] = 0;
-    }
-    ASSERT(regs.rasterizer.vs_output_total <= 7);
-    for (u32 i = 0; i < regs.rasterizer.vs_output_total; ++i) {
-        std::array<Pica::RasterizerRegs::VSOutputAttributes::Semantic, 4> semantics = {
-            regs.rasterizer.vs_output_attributes[i].map_x,
-            regs.rasterizer.vs_output_attributes[i].map_y,
-            regs.rasterizer.vs_output_attributes[i].map_z,
-            regs.rasterizer.vs_output_attributes[i].map_w};
-        for (u32 comp = 0; comp < 4; ++comp) {
-            auto semantic = semantics[comp];
-            if (static_cast<size_t>(semantic / 2) < gs_uniform_data.semantic_map.size()) {
-                size_t array_pos = semantic / 2;
-                size_t vec_pos = (semantic % 2) * 2;
-                gs_uniform_data.semantic_map[array_pos][vec_pos] = i;
-                gs_uniform_data.semantic_map[array_pos][vec_pos + 1] = comp;
-            }
-            else if (semantic != Pica::RasterizerRegs::VSOutputAttributes::INVALID) {
-                LOG_ERROR(Render_OpenGL, "Invalid/unknown semantic id: %u", (unsigned int)semantic);
-            }
-        }
-    }
-
     GLuint shader;
 
     if (regs.pipeline.use_gs == Pica::PipelineRegs::UseGS::No) {
-        shader = gs_default_shader.handle;
-
-        // We only need the semantic maps here
-        glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(GSUniformData::semantic_map), &gs_uniform_data);
+        const GLShader::PicaGSConfigCommon gs_config(regs);
+        GeometryShader& cached_shader = gs_default_shaders[gs_config];
+        if (cached_shader.shader.handle == 0) {
+            cached_shader.shader.handle = GLShader::LoadProgram(
+                nullptr, GLShader::GenerateDefaultGeometryShader(gs_config).c_str(), nullptr, {},
+                true);
+            SetShaderUniformBlockBindings(cached_shader.shader.handle);
+        }
+        shader = cached_shader.shader.handle;
     } else {
-        gs_uniform_data.vs_output_num = regs.pipeline.vs_outmap_total_minus_1_a + 1;
+        state.draw.uniform_buffer = gs_uniform.handle;
+        state.Apply();
 
-        u32 output_i = 0;
         for (u32 i = 0; i < 16; ++i) {
-            gs_uniform_data.input_maps[i / 4][i % 4] = regs.gs.GetRegisterForAttribute(i);
-            gs_uniform_data.output_maps[i / 4][i % 4] =
-                ((regs.gs.output_mask.Value() >> i) & 1) ? std::min(7u, output_i++) : 7;
-            gs_uniform_data.uniforms.b[i / 4][i % 4] =
+            gs_uniform_data.uniforms.bools[i].b =
                 Pica::g_state.gs.uniforms.b[i] ? GL_TRUE : GL_FALSE;
         }
         for (int i = 0; i < 4; ++i) {
@@ -526,29 +493,20 @@ void RasterizerOpenGL::SetupGeometryShader() {
         // The uniform b15 is set to true after every geometry shader invocation.
         Pica::g_state.gs.uniforms.b[15] = true;
 
-        u32 vertex_count =
-            (regs.gs.max_input_attribute_index + 1) / (regs.pipeline.vs_outmap_total_minus_1_a + 1);
+        const GLShader::PicaGSConfig gs_config(regs, Pica::g_state.gs);
 
-        std::array<u64, 4> hashes;
-        hashes[0] = Pica::g_state.gs.GetProgramCodeHash();
-        hashes[1] = Pica::g_state.gs.GetSwizzleDataHash();
-        hashes[2] = regs.gs.main_offset;
-        hashes[3] = vertex_count;
-        u64 cache_key = Common::ComputeHash64(&hashes[0], hashes.size() * sizeof(u64));
-
-        auto map_it = gs_shader_map.find(cache_key);
+        auto map_it = gs_shader_map.find(gs_config);
         if (map_it == gs_shader_map.end()) {
-            std::string gs_program = GLShader::GenerateGeometryShader(
-                Pica::g_state.gs.program_code, Pica::g_state.gs.swizzle_data, regs.gs.main_offset,
-                vertex_count);
+            std::string gs_program = GLShader::GenerateGeometryShader(Pica::g_state.gs, gs_config);
 
-            auto shader_it = gs_shader_cache.find(gs_program);
-            if (shader_it == gs_shader_cache.end()) {
-                shader_it = gs_shader_cache.emplace(gs_program, GeometryShader{}).first;
-                shader_it->second.shader.handle = CompileGeometryShader(gs_program);
+            GeometryShader& cached_shader = gs_shader_cache[gs_program];
+            if (cached_shader.shader.handle == 0) {
+                cached_shader.shader.handle =
+                    GLShader::LoadProgram(nullptr, gs_program.c_str(), nullptr, {}, true);
+                SetShaderUniformBlockBindings(cached_shader.shader.handle);
             }
-            gs_shader_map[cache_key] = &shader_it->second;
-            shader = shader_it->second.shader.handle;
+            gs_shader_map[gs_config] = &cached_shader;
+            shader = cached_shader.shader.handle;
         } else {
             shader = map_it->second->shader.handle;
         }
@@ -791,8 +749,7 @@ void RasterizerOpenGL::DrawTriangles() {
         state.draw.uniform_buffer = uniform_buffer.handle;
         state.Apply();
 
-        glBufferData(GL_UNIFORM_BUFFER, sizeof(UniformData), &uniform_block_data.data,
-                     GL_STATIC_DRAW);
+        glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(UniformData), &uniform_block_data.data);
         uniform_block_data.dirty = false;
     }
 
@@ -858,9 +815,10 @@ void RasterizerOpenGL::DrawTriangles() {
                 regs.pipeline.vertex_attributes.GetPhysicalBaseAddress() + index_info.offset);
             bool index_u16 = index_info.format != 0;
 
-            glDrawElementsBaseVertex(primitive_mode, regs.pipeline.num_vertices,
-                                     index_u16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE, index_buffer,
-                                     -pipeline_index_offset);
+            glDrawRangeElementsBaseVertex(primitive_mode, vs_input_index_start, vs_input_index_end,
+                                          regs.pipeline.num_vertices,
+                                          index_u16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE,
+                                          index_buffer, -vs_input_index_start);
         } else {
             glDrawArrays(primitive_mode, 0, regs.pipeline.num_vertices);
         }
@@ -1651,26 +1609,26 @@ void RasterizerOpenGL::SetShader() {
         current_shader = &shader;
 
         if (separate_shaders_ext_supported) {
-            shader.shader.Create(nullptr, nullptr, GLShader::GenerateFragmentShader(config).c_str(),
-                                 {}, true);
+            shader.shader.Create(nullptr, nullptr,
+                                 GLShader::GenerateFragmentShader(config, true).c_str(), {}, true);
         } else {
-            shader.shader.Create(GLShader::GenerateDefaultVertexShader().c_str(), nullptr,
-                                 GLShader::GenerateFragmentShader(config).c_str());
+            shader.shader.Create(GLShader::GenerateDefaultVertexShader(false).c_str(), nullptr,
+                                 GLShader::GenerateFragmentShader(config, false).c_str());
         }
 
         state.draw.shader_program = shader.shader.handle;
         state.Apply();
 
         // Set the texture samplers to correspond to different texture units
-        GLint uniform_tex = glGetUniformLocation(shader.shader.handle, "tex[0]");
+        GLint uniform_tex = glGetUniformLocation(shader.shader.handle, "tex0");
         if (uniform_tex != -1) {
             glUniform1i(uniform_tex, TextureUnits::PicaTexture(0).id);
         }
-        uniform_tex = glGetUniformLocation(shader.shader.handle, "tex[1]");
+        uniform_tex = glGetUniformLocation(shader.shader.handle, "tex1");
         if (uniform_tex != -1) {
             glUniform1i(uniform_tex, TextureUnits::PicaTexture(1).id);
         }
-        uniform_tex = glGetUniformLocation(shader.shader.handle, "tex[2]");
+        uniform_tex = glGetUniformLocation(shader.shader.handle, "tex2");
         if (uniform_tex != -1) {
             glUniform1i(uniform_tex, TextureUnits::PicaTexture(2).id);
         }
@@ -1720,39 +1678,31 @@ void RasterizerOpenGL::SetShader() {
             state.Apply();
         }
 
-        GLuint block_index = glGetUniformBlockIndex(shader.shader.handle, "shader_data");
-        if (block_index != GL_INVALID_INDEX) {
-            GLint block_size;
-            glGetActiveUniformBlockiv(shader.shader.handle, block_index,
-                                      GL_UNIFORM_BLOCK_DATA_SIZE, &block_size);
-            ASSERT_MSG(block_size == sizeof(UniformData),
-                       "Uniform block size did not match! Got %d, expected %zu",
-                       static_cast<int>(block_size), sizeof(UniformData));
-            glUniformBlockBinding(shader.shader.handle, block_index, 0);
+        SetShaderUniformBlockBindings(shader.shader.handle);
 
-            // Update uniforms
-            SyncDepthScale();
-            SyncDepthOffset();
-            SyncAlphaTest();
-            SyncCombinerColor();
-            auto& tev_stages = Pica::g_state.regs.texturing.GetTevStages();
-            for (int index = 0; index < tev_stages.size(); ++index)
-                SyncTevConstColor(index, tev_stages[index]);
+        // TODO: why is this here ???
+        // Update uniforms
+        SyncDepthScale();
+        SyncDepthOffset();
+        SyncAlphaTest();
+        SyncCombinerColor();
+        auto& tev_stages = Pica::g_state.regs.texturing.GetTevStages();
+        for (int index = 0; index < tev_stages.size(); ++index)
+            SyncTevConstColor(index, tev_stages[index]);
 
-            SyncGlobalAmbient();
-            for (int light_index = 0; light_index < 8; light_index++) {
-                SyncLightSpecular0(light_index);
-                SyncLightSpecular1(light_index);
-                SyncLightDiffuse(light_index);
-                SyncLightAmbient(light_index);
-                SyncLightPosition(light_index);
-                SyncLightDistanceAttenuationBias(light_index);
-                SyncLightDistanceAttenuationScale(light_index);
-            }
-
-            SyncFogColor();
-            SyncProcTexNoise();
+        SyncGlobalAmbient();
+        for (int light_index = 0; light_index < 8; light_index++) {
+            SyncLightSpecular0(light_index);
+            SyncLightSpecular1(light_index);
+            SyncLightDiffuse(light_index);
+            SyncLightAmbient(light_index);
+            SyncLightPosition(light_index);
+            SyncLightDistanceAttenuationBias(light_index);
+            SyncLightDistanceAttenuationScale(light_index);
         }
+
+        SyncFogColor();
+        SyncProcTexNoise();
     }
 }
 

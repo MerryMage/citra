@@ -146,12 +146,15 @@ GLuint LoadProgram(const char* vertex_shader, const char* geometry_shader,
     ASSERT_MSG(result == GL_TRUE, "Shader not linked");
 
     if (vertex_shader) {
+        glDetachShader(program_id, vertex_shader_id);
         glDeleteShader(vertex_shader_id);
     }
     if (geometry_shader) {
+        glDetachShader(program_id, geometry_shader_id);
         glDeleteShader(geometry_shader_id);
     }
     if (fragment_shader) {
+        glDetachShader(program_id, fragment_shader_id);
         glDeleteShader(fragment_shader_id);
     }
 

@@ -26,6 +26,7 @@ ConfigureGraphics::~ConfigureGraphics() {}
 void ConfigureGraphics::setConfiguration() {
     ui->toggle_hw_renderer->setChecked(Settings::values.use_hw_renderer);
     ui->hw_shaders->setCurrentIndex(static_cast<int>(Settings::values.hw_shaders));
+    ui->accurate_mul->setChecked(Settings::values.shaders_accurate_mul);
     ui->resolution_factor_combobox->setEnabled(Settings::values.use_hw_renderer);
     ui->toggle_shader_jit->setChecked(Settings::values.use_shader_jit);
     ui->resolution_factor_combobox->setCurrentIndex(Settings::values.resolution_factor);
@@ -40,6 +41,7 @@ void ConfigureGraphics::applyConfiguration() {
     Settings::values.use_hw_renderer = ui->toggle_hw_renderer->isChecked();
     Settings::values.hw_shaders =
         static_cast<Settings::HwShaders>(ui->hw_shaders->currentIndex());
+    Settings::values.shaders_accurate_mul = ui->accurate_mul->isChecked();
     Settings::values.use_shader_jit = ui->toggle_shader_jit->isChecked();
     Settings::values.resolution_factor =
         static_cast<u16>(ui->resolution_factor_combobox->currentIndex());
