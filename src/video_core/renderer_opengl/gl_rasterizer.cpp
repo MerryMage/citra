@@ -352,16 +352,6 @@ void RasterizerOpenGL::SetupVertexShader(bool is_indexed) {
     std::array<bool, 16> enable_attributes{};
     ASSERT(vertex_attributes.GetNumTotalAttributes() < 16);
 
-    for (int i = 0; i < vertex_attributes.GetNumTotalAttributes(); ++i) {
-        if (vertex_attributes.IsDefaultAttribute(i)) {
-            glVertexAttrib4f(regs.vs.GetRegisterForAttribute(static_cast<u32>(i)),
-                             Pica::g_state.input_default_attributes.attr[i].x.ToFloat32(),
-                             Pica::g_state.input_default_attributes.attr[i].y.ToFloat32(),
-                             Pica::g_state.input_default_attributes.attr[i].z.ToFloat32(),
-                             Pica::g_state.input_default_attributes.attr[i].w.ToFloat32());
-        }
-    }
-
     GLintptr buffer_offset = 0;
     for (int i = 0; i < 12; ++i) {
         const auto& loader = vertex_attributes.attribute_loaders[i];
@@ -374,10 +364,10 @@ void RasterizerOpenGL::SetupVertexShader(bool is_indexed) {
         for (unsigned comp = 0; comp < loader.component_count && comp < 12; ++comp) {
             int attribute_index = loader.GetComponent(comp);
             if (attribute_index < 12) {
-                offset = Common::AlignUp(offset,
-                                         vertex_attributes.GetElementSizeInBytes(attribute_index));
+                if (vertex_attributes.GetNumElements(attribute_index) != 0) {
+                    offset = Common::AlignUp(
+                        offset, vertex_attributes.GetElementSizeInBytes(attribute_index));
 
-                if (!vertex_attributes.IsDefaultAttribute(attribute_index)) {
                     u32 input_reg =
                         regs.vs.GetRegisterForAttribute(static_cast<u32>(attribute_index));
                     glVertexAttribPointer(input_reg,
@@ -387,9 +377,9 @@ void RasterizerOpenGL::SetupVertexShader(bool is_indexed) {
                                           GL_FALSE, static_cast<GLsizei>(loader.byte_count),
                                           reinterpret_cast<GLvoid*>(buffer_offset + offset));
                     enable_attributes[input_reg] = true;
-                }
 
-                offset += vertex_attributes.GetStride(attribute_index);
+                    offset += vertex_attributes.GetStride(attribute_index);
+                }
             } else {
                 // Attribute ids 12, 13, 14 and 15 signify 4, 8, 12 and 16-byte paddings,
                 // respectively
@@ -419,6 +409,17 @@ void RasterizerOpenGL::SetupVertexShader(bool is_indexed) {
             }
             hw_vao_enabled_attributes[i] = enable_attributes[i];
         }
+
+        if (vertex_attributes.IsDefaultAttribute(i)) {
+            u32 reg = regs.vs.GetRegisterForAttribute(i);
+            if (!enable_attributes[reg]) {
+                glVertexAttrib4f(reg, Pica::g_state.input_default_attributes.attr[i].x.ToFloat32(),
+                                 Pica::g_state.input_default_attributes.attr[i].y.ToFloat32(),
+                                 Pica::g_state.input_default_attributes.attr[i].z.ToFloat32(),
+                                 Pica::g_state.input_default_attributes.attr[i].w.ToFloat32());
+            }
+        }
+
         vs_uniform_data.uniforms.bools[i].b = Pica::g_state.vs.uniforms.b[i] ? GL_TRUE : GL_FALSE;
     }
     for (int i = 0; i < 4; ++i) {
