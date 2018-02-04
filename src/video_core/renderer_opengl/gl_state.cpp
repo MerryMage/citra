@@ -68,6 +68,7 @@ OpenGLState::OpenGLState() {
     draw.vertex_buffer = 0;
     draw.uniform_buffer = 0;
     draw.shader_program = 0;
+    draw.program_pipeline = 0;
 
     scissor.enabled = false;
     scissor.x = 0;
@@ -271,6 +272,11 @@ void OpenGLState::Apply() const {
         glUseProgram(draw.shader_program);
     }
 
+    // Program pipeline
+    if (draw.program_pipeline != cur_state.draw.program_pipeline) {
+        glBindProgramPipeline(draw.program_pipeline);
+    }
+
     // Scissor test
     if (scissor.enabled != cur_state.scissor.enabled) {
         if (scissor.enabled) {
@@ -340,6 +346,13 @@ OpenGLState& OpenGLState::ResetSampler(GLuint handle) {
 OpenGLState& OpenGLState::ResetProgram(GLuint handle) {
     if (draw.shader_program == handle) {
         draw.shader_program = 0;
+    }
+    return *this;
+}
+
+OpenGLState& OpenGLState::ResetPipeline(GLuint handle) {
+    if (draw.program_pipeline == handle) {
+        draw.program_pipeline = 0;
     }
     return *this;
 }

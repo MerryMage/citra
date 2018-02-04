@@ -45,7 +45,7 @@ struct PrimitiveAssembler {
      */
     void Reconfigure(PipelineRegs::TriangleTopology topology);
 
-private:
+public:
     PipelineRegs::TriangleTopology topology;
 
     int buffer_index;

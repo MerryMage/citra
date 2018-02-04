@@ -50,6 +50,7 @@ public:
     bool AccelerateFill(const GPU::Regs::MemoryFillConfig& config) override;
     bool AccelerateDisplay(const GPU::Regs::FramebufferConfig& config, PAddr framebuffer_addr,
                            u32 pixel_stride, ScreenInfo& screen_info) override;
+    bool AccelerateDrawBatch(bool is_indexed) override;
 
     /// OpenGL shader generated for a given Pica register state
     struct PicaShader {
@@ -79,6 +80,7 @@ private:
 
     /// Structure that the hardware rendered vertices are composed of
     struct HardwareVertex {
+        HardwareVertex() = default;
         HardwareVertex(const Pica::Shader::OutputVertex& v, bool flip_quaternion) {
             position[0] = v.pos.x.ToFloat32();
             position[1] = v.pos.y.ToFloat32();
@@ -110,14 +112,14 @@ private:
             }
         }
 
-        GLfloat position[4];
-        GLfloat color[4];
-        GLfloat tex_coord0[2];
-        GLfloat tex_coord1[2];
-        GLfloat tex_coord2[2];
+        GLvec4 position;
+        GLvec4 color;
+        GLvec2 tex_coord0;
+        GLvec2 tex_coord1;
+        GLvec2 tex_coord2;
         GLfloat tex_coord0_w;
-        GLfloat normquat[4];
-        GLfloat view[3];
+        GLvec4 normquat;
+        GLvec3 view;
     };
 
     struct LightSrc {
@@ -259,13 +261,14 @@ private:
     /// Syncs the specified light's distance attenuation scale to match the PICA register
     void SyncLightDistanceAttenuationScale(int light_index);
 
+    bool separate_shaders_ext_supported;
     OpenGLState state;
 
     RasterizerCacheOpenGL res_cache;
 
     std::vector<HardwareVertex> vertex_batch;
 
-    std::unordered_map<GLShader::PicaShaderConfig, std::unique_ptr<PicaShader>> shader_cache;
+    std::unordered_map<GLShader::PicaShaderConfig, PicaShader> shader_cache;
     const PicaShader* current_shader = nullptr;
     bool shader_dirty;
 
@@ -281,8 +284,12 @@ private:
         bool dirty;
     } uniform_block_data = {};
 
+    OGLPipeline pipeline;
+    GLint pipeline_index_offset;
+    OGLVertexArray sw_vao;
+    OGLVertexArray hw_vao;
+
     std::array<SamplerInfo, 3> texture_samplers;
-    OGLVertexArray vertex_array;
     OGLBuffer vertex_buffer;
     OGLBuffer uniform_buffer;
     OGLFramebuffer framebuffer;
@@ -314,4 +321,63 @@ private:
     OGLBuffer proctex_diff_lut_buffer;
     OGLTexture proctex_diff_lut;
     std::array<GLvec4, 256> proctex_diff_lut_data{};
+
+    struct PicaUniformsData {
+        alignas(16) std::array<GLuvec4, 4> b;
+        alignas(16) std::array<GLuvec4, 4> i;
+        alignas(16) std::array<GLvec4, 96> f;
+    };
+
+    struct VSUniformData {
+        alignas(16) std::array<GLuvec4, 4> input_maps;  // 4*4
+        alignas(16) std::array<GLuvec4, 4> output_maps; // 4*4
+        PicaUniformsData uniforms;
+    };
+    static constexpr auto gsdgdsfg = sizeof(VSUniformData::uniforms.f);
+    static constexpr auto fsdfsddf = sizeof(VSUniformData);
+    static_assert(sizeof(VSUniformData) == 1792, "");
+
+    struct GSUniformData {
+        alignas(16) std::array<GLuvec4, 12> semantic_map; // 24 slots / 2 slots per vec4
+        GLuint vs_output_num;
+        alignas(16) std::array<GLuvec4, 4> input_maps;    // 4*4
+        alignas(16) std::array<GLuvec4, 4> output_maps;   // 4*4
+        PicaUniformsData uniforms;
+    };
+    static constexpr auto gsdgsdfgsdg = sizeof(GSUniformData);
+    static_assert(sizeof(GSUniformData) == 2000, "");
+
+    static_assert(sizeof(VSUniformData) < 16384 && sizeof(GSUniformData) < 16384,
+                  "UniformData structure must be less than 16kb as per the OpenGL spec");
+
+    OGLBuffer vs_input_buffer;
+    GLsizeiptr vs_input_buffer_size;
+    OGLBuffer vs_uniform;
+    OGLShader vs_default_shader;
+    VSUniformData vs_uniform_data;
+
+    struct VertexShader {
+        OGLShader shader;
+    };
+    std::unordered_map<u64, VertexShader*> vs_shader_map;
+    std::unordered_map<std::string, VertexShader> vs_shader_cache;
+
+    void SetupVertexShader(bool is_indexed);
+    GLuint CompileVertexShader(const std::string& source);
+
+    OGLBuffer gs_uniform;
+    OGLShader gs_default_shader;
+    GSUniformData gs_uniform_data;
+
+    struct GeometryShader {
+        OGLShader shader;
+    };
+    std::unordered_map<u64, GeometryShader*> gs_shader_map;
+    std::unordered_map<std::string, GeometryShader> gs_shader_cache;
+
+    void SetupGeometryShader();
+    GLuint CompileGeometryShader(const std::string& source);
+
+    enum class AccelDraw { Disabled, Arrays, Indexed };
+    AccelDraw accelerate_draw;
 };

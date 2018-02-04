@@ -12,6 +12,7 @@
 #include "common/assert.h"
 #include "common/common_funcs.h"
 #include "common/common_types.h"
+#include "common/hash.h"
 #include "common/vector_math.h"
 #include "video_core/pica_types.h"
 #include "video_core/regs_rasterizer.h"
@@ -196,7 +197,28 @@ struct ShaderSetup {
     }
 
     std::array<u32, MAX_PROGRAM_CODE_LENGTH> program_code;
+    u64 program_code_hash;
+    bool program_code_hash_dirty = true;
+
+    u64 GetProgramCodeHash() {
+        if (program_code_hash_dirty) {
+            program_code_hash = Common::ComputeHash64(&program_code, sizeof(program_code));
+            program_code_hash_dirty = false;
+        }
+        return program_code_hash;
+    }
+
     std::array<u32, MAX_SWIZZLE_DATA_LENGTH> swizzle_data;
+    u64 swizzle_data_hash;
+    bool swizzle_data_hash_dirty = true;
+
+    u64 GetSwizzleDataHash() {
+        if (swizzle_data_hash_dirty) {
+            swizzle_data_hash = Common::ComputeHash64(&swizzle_data, sizeof(swizzle_data));
+            swizzle_data_hash_dirty = false;
+        }
+        return swizzle_data_hash;
+    }
 
     /// Data private to ShaderEngines
     struct EngineData {

@@ -91,10 +91,12 @@ public:
     }
 
     /// Creates a new internal OpenGL resource and stores the handle
-    void Create(const char* vert_shader, const char* frag_shader) {
+    void Create(const char* vert_shader, const char* geo_shader, const char* frag_shader,
+                const std::vector<const char*>& feedback_vars = {},
+                bool separable_program = false) {
         if (handle != 0)
             return;
-        handle = GLShader::LoadProgram(vert_shader, frag_shader);
+        handle = GLShader::LoadProgram(vert_shader, geo_shader, frag_shader, feedback_vars, separable_program);
     }
 
     /// Deletes the internal OpenGL resource
@@ -103,6 +105,39 @@ public:
             return;
         glDeleteProgram(handle);
         OpenGLState::GetCurState().ResetProgram(handle).Apply();
+        handle = 0;
+    }
+
+    GLuint handle = 0;
+};
+
+class OGLPipeline : private NonCopyable {
+public:
+    OGLPipeline() = default;
+    OGLPipeline(OGLPipeline&& o) {
+        std::swap(handle, o.handle);
+    }
+    ~OGLPipeline() {
+        Release();
+    }
+    OGLPipeline& operator=(OGLPipeline&& o) {
+        std::swap(handle, o.handle);
+        return *this;
+    }
+
+    /// Creates a new internal OpenGL resource and stores the handle
+    void Create() {
+        if (handle != 0)
+            return;
+        glGenProgramPipelines(1, &handle);
+    }
+
+    /// Deletes the internal OpenGL resource
+    void Release() {
+        if (handle == 0)
+            return;
+        glDeleteProgramPipelines(1, &handle);
+        OpenGLState::GetCurState().ResetPipeline(handle).Apply();
         handle = 0;
     }
 

@@ -46,6 +46,7 @@ struct PipelineRegs {
             BitField<26, 2, u32> size6;
             BitField<28, 2, VertexAttributeFormat> format7;
             BitField<30, 2, u32> size7;
+            u32 format_low_raw;
         };
 
         union {
@@ -62,6 +63,8 @@ struct PipelineRegs {
 
             // number of total attributes minus 1
             BitField<28, 4, u32> max_attribute_index;
+
+            u32 format_high_raw;
         };
 
         inline VertexAttributeFormat GetFormat(int n) const {
@@ -110,6 +113,8 @@ struct PipelineRegs {
                 BitField<20, 4, u32> comp5;
                 BitField<24, 4, u32> comp6;
                 BitField<28, 4, u32> comp7;
+
+                u32 config_low_raw;
             };
 
             union {
@@ -122,6 +127,8 @@ struct PipelineRegs {
                 BitField<16, 8, u32> byte_count;
 
                 BitField<28, 4, u32> component_count;
+
+                u32 config_high_raw;
             };
 
             inline int GetComponent(int n) const {

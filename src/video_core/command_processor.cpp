@@ -13,6 +13,7 @@
 #include "core/hle/service/gsp/gsp.h"
 #include "core/hw/gpu.h"
 #include "core/memory.h"
+#include "core/settings.h"
 #include "core/tracer/recorder.h"
 #include "video_core/command_processor.h"
 #include "video_core/debug_utils/debug_utils.h"
@@ -27,6 +28,8 @@
 #include "video_core/shader/shader.h"
 #include "video_core/vertex_loader.h"
 #include "video_core/video_core.h"
+
+#include "common/bit_set.h"
 
 namespace Pica {
 
@@ -279,12 +282,47 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
     case PICA_REG_INDEX(pipeline.trigger_draw):
     case PICA_REG_INDEX(pipeline.trigger_draw_indexed): {
         MICROPROFILE_SCOPE(GPU_Drawing);
+        bool is_indexed = (id == PICA_REG_INDEX(pipeline.trigger_draw_indexed));
 
 #if PICA_LOG_TEV
         DebugUtils::DumpTevStageConfig(regs.GetTevStages());
 #endif
         if (g_debug_context)
             g_debug_context->OnEvent(DebugContext::Event::IncomingPrimitiveBatch, nullptr);
+
+        PrimitiveAssembler<Shader::OutputVertex>& primitive_assembler = g_state.primitive_assembler;
+
+        bool accelerate_draw = Settings::values.hw_shaders != Settings::HwShaders::Off &&
+                               (regs.pipeline.use_gs == PipelineRegs::UseGS::No ||
+                                Settings::values.hw_shaders == Settings::HwShaders::All);
+
+        accelerate_draw &=
+            primitive_assembler.buffer_index == 0 && !primitive_assembler.strip_ready;
+
+        if (regs.pipeline.use_gs == PipelineRegs::UseGS::No) {
+            switch (primitive_assembler.topology) {
+            case PipelineRegs::TriangleTopology::Shader:
+            case PipelineRegs::TriangleTopology::List:
+                accelerate_draw &= (regs.pipeline.num_vertices % 3) ==
+                                   0; // || peek_into_cmdlist_for_reset_primitive();
+                break;
+            case PipelineRegs::TriangleTopology::Strip:
+            case PipelineRegs::TriangleTopology::Fan:
+                // accelerate_draw &= peek_into_cmdlist_for_reset_primitive();
+                // accelerate_draw = false;
+                break;
+            default:
+                UNREACHABLE();
+            }
+        }
+
+        if (accelerate_draw &&
+            VideoCore::g_renderer->Rasterizer()->AccelerateDrawBatch(is_indexed)) {
+            if (g_debug_context) {
+                g_debug_context->OnEvent(DebugContext::Event::FinishedPrimitiveBatch, nullptr);
+            }
+            break;
+        }
 
         // Processes information about internal vertex attributes to figure out how a vertex is
         // loaded.
@@ -294,14 +332,10 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
         Shader::OutputVertex::ValidateSemantics(regs.rasterizer);
 
         // Load vertices
-        bool is_indexed = (id == PICA_REG_INDEX(pipeline.trigger_draw_indexed));
-
         const auto& index_info = regs.pipeline.index_array;
         const u8* index_address_8 = Memory::GetPhysicalPointer(base_address + index_info.offset);
         const u16* index_address_16 = reinterpret_cast<const u16*>(index_address_8);
         bool index_u16 = index_info.format != 0;
-
-        PrimitiveAssembler<Shader::OutputVertex>& primitive_assembler = g_state.primitive_assembler;
 
         if (g_debug_context && g_debug_context->recorder) {
             for (int i = 0; i < 3; ++i) {
@@ -348,7 +382,7 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
 
             // -1 is a common special value used for primitive restart. Since it's unknown if
             // the PICA supports it, and it would mess up the caching, guard against it here.
-            ASSERT(vertex != -1);
+            ASSERT(!index_u16 || vertex != 0xFFFF);
 
             bool vertex_cache_hit = false;
 
@@ -451,6 +485,7 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
             LOG_ERROR(HW_GPU, "Invalid GS program offset %u", offset);
         } else {
             g_state.gs.program_code[offset] = value;
+            g_state.gs.program_code_hash_dirty = true;
             offset++;
         }
         break;
@@ -469,6 +504,7 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
             LOG_ERROR(HW_GPU, "Invalid GS swizzle pattern offset %u", offset);
         } else {
             g_state.gs.swizzle_data[offset] = value;
+            g_state.gs.swizzle_data_hash_dirty = true;
             offset++;
         }
         break;
@@ -518,8 +554,10 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
             LOG_ERROR(HW_GPU, "Invalid VS program offset %u", offset);
         } else {
             g_state.vs.program_code[offset] = value;
+            g_state.vs.program_code_hash_dirty = true;
             if (!g_state.regs.pipeline.gs_unit_exclusive_configuration) {
                 g_state.gs.program_code[offset] = value;
+                g_state.gs.program_code_hash_dirty = true;
             }
             offset++;
         }
@@ -539,8 +577,10 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
             LOG_ERROR(HW_GPU, "Invalid VS swizzle pattern offset %u", offset);
         } else {
             g_state.vs.swizzle_data[offset] = value;
+            g_state.vs.swizzle_data_hash_dirty = true;
             if (!g_state.regs.pipeline.gs_unit_exclusive_configuration) {
                 g_state.gs.swizzle_data[offset] = value;
+                g_state.gs.swizzle_data_hash_dirty = true;
             }
             offset++;
         }
