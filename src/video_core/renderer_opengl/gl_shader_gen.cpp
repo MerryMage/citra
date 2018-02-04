@@ -1372,12 +1372,11 @@ layout (std140) uniform vs_config {
                std::to_string(i) + ";\n";
     }
 
-    out += R"(
-void main() {
-    exec_shader();
-}
-
-)";
+    out += "\nvoid main() {\n";
+    for (u32 i = 0; i < config.num_outputs; ++i) {
+        out += "    vs_out_attr" + std::to_string(i) + " = vec4(0.0, 0.0, 0.0, 1.0);\n";
+    }
+    out += "\n    exec_shader();\n}\n\n";
 
     out += program_source;
 
@@ -1591,6 +1590,9 @@ void emit_cb() {
 
 void main() {
 )";
+    for (u32 i = 0; i < config.num_outputs; ++i) {
+        out += "    output_buffer.attributes[" + std::to_string(i) + "] = vec4(0.0, 0.0, 0.0, 1.0);\n";
+    }
 
     // execute shader
     out += "\n    exec_shader();\n\n";
