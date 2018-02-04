@@ -11,6 +11,12 @@
 
 namespace Settings {
 
+enum class HwShaders {
+    Off,
+    VS,
+    All
+};
+
 enum class LayoutOption {
     Default,
     SingleScreen,
@@ -107,6 +113,7 @@ struct Values {
 
     // Renderer
     bool use_hw_renderer;
+    HwShaders hw_shaders;
     bool use_shader_jit;
     u16 resolution_factor;
     bool use_vsync;

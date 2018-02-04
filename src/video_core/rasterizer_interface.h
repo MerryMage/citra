@@ -7,11 +7,17 @@
 #include "common/common_types.h"
 #include "core/hw/gpu.h"
 
+
+
+#include <vector>
+
+
 struct ScreenInfo;
 
 namespace Pica {
 namespace Shader {
 struct OutputVertex;
+struct AttributeBuffer;
 }
 } // namespace Pica
 
@@ -64,6 +70,10 @@ public:
     virtual bool AccelerateDisplay(const GPU::Regs::FramebufferConfig& config,
                                    PAddr framebuffer_addr, u32 pixel_stride,
                                    ScreenInfo& screen_info) {
+        return false;
+    }
+
+    virtual bool AccelerateDrawBatch(bool is_indexed) {
         return false;
     }
 };

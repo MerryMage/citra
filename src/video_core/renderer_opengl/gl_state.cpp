@@ -272,6 +272,11 @@ void OpenGLState::Apply() const {
         glUseProgram(draw.shader_program);
     }
 
+    // Program pipeline
+    if (draw.program_pipeline != cur_state.draw.program_pipeline) {
+        glBindProgramPipeline(draw.program_pipeline);
+    }
+
     // Scissor test
     if (scissor.enabled != cur_state.scissor.enabled) {
         if (scissor.enabled) {

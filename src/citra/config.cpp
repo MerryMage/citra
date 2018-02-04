@@ -95,6 +95,8 @@ void Config::ReadValues() {
 
     // Renderer
     Settings::values.use_hw_renderer = sdl2_config->GetBoolean("Renderer", "use_hw_renderer", true);
+    Settings::values.hw_shaders =
+        static_cast<Settings::HwShaders>(sdl2_config->GetInteger("Renderer", "hw_shaders", 0));
     Settings::values.use_shader_jit = sdl2_config->GetBoolean("Renderer", "use_shader_jit", true);
     Settings::values.resolution_factor =
         static_cast<u16>(sdl2_config->GetInteger("Renderer", "resolution_factor", 1));

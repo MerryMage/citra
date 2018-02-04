@@ -30,6 +30,36 @@
          </widget>
         </item>
         <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_5">
+          <item>
+           <widget class="QLabel" name="label2">
+            <property name="text">
+             <string>Hardware shaders: </string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="hw_shaders">
+            <item>
+             <property name="text">
+              <string>Off</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Vertex Shaders</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Vertex + Geometry Shaders</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
          <widget class="QCheckBox" name="toggle_shader_jit">
           <property name="text">
            <string>Enable shader JIT</string>

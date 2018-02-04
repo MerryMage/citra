@@ -133,10 +133,34 @@ union PicaShaderConfig {
 };
 
 /**
- * Generates the GLSL vertex shader program source code for the current Pica state
+ * Generates the GLSL default vertex shader program source code for the SW pipeline
  * @returns String of the shader source code
  */
-std::string GenerateVertexShader();
+std::string GenerateDefaultVertexShader();
+
+/**
+ * Generates the GLSL vertex shader program source code for the given VS program and its main offset
+ * @returns String of the shader source code
+ */
+std::string GenerateVertexShader(
+    const std::array<u32, Pica::Shader::MAX_PROGRAM_CODE_LENGTH>& program_code,
+    const std::array<u32, Pica::Shader::MAX_SWIZZLE_DATA_LENGTH>& swizzle_data, u32 main_offset);
+
+/**
+ * Generates the GLSL default geometry shader program source code for the HW pipeline
+ * @returns String of the shader source code
+ */
+std::string GenerateDefaultGeometryShader();
+
+/**
+ * Generates the GLSL geometry shader program source code for the given GS program and its
+ * configuration
+ * @returns String of the shader source code
+ */
+std::string GenerateGeometryShader(
+    const std::array<u32, Pica::Shader::MAX_PROGRAM_CODE_LENGTH>& program_code,
+    const std::array<u32, Pica::Shader::MAX_SWIZZLE_DATA_LENGTH>& swizzle_data, u32 main_offset,
+    u32 vertex_count);
 
 /**
  * Generates the GLSL fragment shader program source code for the current Pica state
