@@ -27,6 +27,7 @@
 #include "video_core/renderer_opengl/gl_resource_manager.h"
 #include "video_core/renderer_opengl/gl_shader_gen.h"
 #include "video_core/renderer_opengl/gl_state.h"
+#include "video_core/renderer_opengl/gl_stream_buffer.h"
 #include "video_core/renderer_opengl/pica_to_gl.h"
 #include "video_core/shader/shader.h"
 
@@ -108,6 +109,8 @@ public:
                   "UniformData structure must be less than 16kb as per the OpenGL spec");
 
     struct PicaUniformsData {
+        void SetFromRegs(const Pica::ShaderRegs& regs, const Pica::Shader::ShaderSetup& setup);
+
         struct {
             alignas(16) GLuint b;
         } bools[16];
@@ -295,7 +298,11 @@ private:
     /// Syncs the specified light's distance attenuation scale to match the PICA register
     void SyncLightDistanceAttenuationScale(int light_index);
 
-    bool separate_shaders_ext_supported;
+    bool has_ARB_separate_shader_objects;
+    bool has_ARB_vertex_attrib_binding;
+    bool has_ARB_buffer_storage;
+    GLint uniform_buffer_offset_alignment;
+
     OpenGLState state;
 
     RasterizerCacheOpenGL res_cache;
@@ -356,29 +363,27 @@ private:
     OGLTexture proctex_diff_lut;
     std::array<GLvec4, 256> proctex_diff_lut_data{};
 
-    OGLBuffer vs_input_buffer;
-    GLsizeiptr vs_input_buffer_size;
+    static constexpr size_t STREAM_BUFFER_SIZE = 4 * 1024 * 1024;
+    std::unique_ptr<OGLStreamBuffer> stream_buffer;
 
-    GLint vs_input_index_start;
-    GLint vs_input_index_end;
+    GLint vs_input_index_min;
+    GLint vs_input_index_max;
+    GLsizeiptr vs_input_size;
 
-    OGLBuffer vs_uniform;
-    VSUniformData vs_uniform_data;
+    void AnalyzeVertexArray(bool is_indexed);
+    void SetupVertexArray(u8* array_ptr, GLintptr buffer_offset);
 
     std::unordered_map<GLShader::PicaVSConfig, VertexShader*> vs_shader_map;
     std::unordered_map<std::string, VertexShader> vs_shader_cache;
     OGLShader vs_default_shader;
 
-    void SetupVertexShader(bool is_indexed);
-
-    OGLBuffer gs_uniform;
-    GSUniformData gs_uniform_data;
+    void SetupVertexShader(VSUniformData* ub_ptr, GLintptr buffer_offset);
 
     std::unordered_map<GLShader::PicaGSConfig, GeometryShader*> gs_shader_map;
     std::unordered_map<std::string, GeometryShader> gs_shader_cache;
     std::unordered_map<GLShader::PicaGSConfigCommon, GeometryShader> gs_default_shaders;
 
-    void SetupGeometryShader();
+    void SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffer_offset);
 
     enum class AccelDraw { Disabled, Arrays, Indexed };
     AccelDraw accelerate_draw;
