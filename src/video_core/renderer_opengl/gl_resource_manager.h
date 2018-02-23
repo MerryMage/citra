@@ -177,6 +177,38 @@ public:
     GLuint handle = 0;
 };
 
+class OGLSync : private NonCopyable {
+public:
+    OGLSync() = default;
+    OGLSync(OGLSync&& o) {
+        std::swap(handle, o.handle);
+    }
+    ~OGLSync() {
+        Release();
+    }
+    OGLSync& operator=(OGLSync&& o) {
+        std::swap(handle, o.handle);
+        return *this;
+    }
+
+    /// Creates a new internal OpenGL resource and stores the handle
+    void Create() {
+        if (handle != 0)
+            return;
+        handle = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    }
+
+    /// Deletes the internal OpenGL resource
+    void Release() {
+        if (handle == 0)
+            return;
+        glDeleteSync(handle);
+        handle = 0;
+    }
+
+    GLsync handle = 0;
+};
+
 class OGLVertexArray : private NonCopyable {
 public:
     OGLVertexArray() = default;
