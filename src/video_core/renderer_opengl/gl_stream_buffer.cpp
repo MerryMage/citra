@@ -54,7 +54,7 @@ OGLStreamBuffer::~OGLStreamBuffer() {
     Release();
 }
 
-GLuint OGLStreamBuffer::GetHandle() {
+GLuint OGLStreamBuffer::GetHandle() const {
     return gl_buffer.handle;
 }
 
