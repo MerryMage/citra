@@ -76,26 +76,26 @@ void RasterizerOpenGL::PicaUniformsData::SetFromRegs(const Pica::ShaderRegs& reg
 RasterizerOpenGL::RasterizerOpenGL() {
     shader_dirty = true;
 
+    has_ARB_buffer_storage = false;
+    has_ARB_direct_state_access = false;
     has_ARB_separate_shader_objects = false;
     has_ARB_vertex_attrib_binding = false;
-    has_ARB_buffer_storage = false;
 
     GLint ext_num;
     glGetIntegerv(GL_NUM_EXTENSIONS, &ext_num);
     for (GLint i = 0; i < ext_num; i++) {
         std::string extension{reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, i))};
 
-        if (extension == "GL_ARB_separate_shader_objects") {
+        if (extension == "GL_ARB_buffer_storage") {
+            has_ARB_buffer_storage = true;
+        } else if (extension == "GL_ARB_direct_state_access") {
+            has_ARB_direct_state_access = true;
+        } else if (extension == "GL_ARB_separate_shader_objects") {
             has_ARB_separate_shader_objects = true;
         } else if (extension == "GL_ARB_vertex_attrib_binding") {
             has_ARB_vertex_attrib_binding = true;
-        } else if (extension == "GL_ARB_buffer_storage") {
-            has_ARB_buffer_storage = true;
         }
     }
-
-    uniform_buffer_offset_alignment = 1;
-    glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &uniform_buffer_offset_alignment);
 
     // Clipping plane 0 is always enabled for PICA fixed clip plane z <= 0
     state.clip_distance[0] = true;
@@ -113,7 +113,11 @@ RasterizerOpenGL::RasterizerOpenGL() {
 
     state.draw.vertex_array = sw_vao.handle;
     state.draw.vertex_buffer = vertex_buffer.handle;
+    state.draw.uniform_buffer = uniform_buffer.handle;
     state.Apply();
+
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(UniformData), nullptr, GL_STATIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buffer.handle);
 
     uniform_block_data.dirty = true;
 
@@ -248,7 +252,20 @@ RasterizerOpenGL::RasterizerOpenGL() {
         state.draw.shader_program = 0;
         state.draw.vertex_array = hw_vao.handle;
         state.Apply();
+
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, stream_buffer->GetHandle());
+
+        vs_uniform_buffer.Create();
+        glBindBuffer(GL_UNIFORM_BUFFER, vs_uniform_buffer.handle);
+        glBufferData(GL_UNIFORM_BUFFER, sizeof(VSUniformData), nullptr, GL_STREAM_COPY);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 1, vs_uniform_buffer.handle);
+
+        gs_uniform_buffer.Create();
+        glBindBuffer(GL_UNIFORM_BUFFER, gs_uniform_buffer.handle);
+        glBufferData(GL_UNIFORM_BUFFER, sizeof(GSUniformData), nullptr, GL_STREAM_COPY);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 2, gs_uniform_buffer.handle);
+
+        glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer.handle);
 
         vs_default_shader.Create(GLShader::GenerateDefaultVertexShader(true).c_str(), nullptr,
                                  nullptr, {}, true);
@@ -450,8 +467,6 @@ void RasterizerOpenGL::SetupVertexShader(VSUniformData* ub_ptr, GLintptr buffer_
     MICROPROFILE_SCOPE(OpenGL_VS);
 
     ub_ptr->uniforms.SetFromRegs(Pica::g_state.regs.vs, Pica::g_state.vs);
-    glBindBufferRange(GL_UNIFORM_BUFFER, 1, stream_buffer->GetHandle(), buffer_offset,
-                      sizeof(VSUniformData));
 
     GLuint shader;
     const GLShader::PicaVSConfig vs_config(Pica::g_state.regs, Pica::g_state.vs);
@@ -493,8 +508,6 @@ void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffe
         shader = cached_shader.shader.handle;
     } else {
         ub_ptr->uniforms.SetFromRegs(Pica::g_state.regs.gs, Pica::g_state.gs);
-        glBindBufferRange(GL_UNIFORM_BUFFER, 2, stream_buffer->GetHandle(), buffer_offset,
-                          sizeof(GSUniformData));
 
         // The uniform b15 is set to true after every geometry shader invocation.
         Pica::g_state.gs.uniforms.b[15] = true;
@@ -752,9 +765,7 @@ void RasterizerOpenGL::DrawTriangles() {
 
     // Sync the uniform data
     if (uniform_block_data.dirty) {
-        glBindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buffer.handle);
-        glBufferData(GL_UNIFORM_BUFFER, sizeof(UniformData), &uniform_block_data.data,
-                     GL_STATIC_DRAW);
+        glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(UniformData), &uniform_block_data.data);
         uniform_block_data.dirty = false;
     }
 
@@ -823,18 +834,16 @@ void RasterizerOpenGL::DrawTriangles() {
         if (is_indexed) {
             buffer_size = Common::AlignUp(buffer_size, 4) + index_buffer_size;
         }
-        buffer_size =
-            Common::AlignUp(buffer_size, uniform_buffer_offset_alignment) + sizeof(VSUniformData);
+        buffer_size += sizeof(VSUniformData);
         if (use_gs) {
-            buffer_size = Common::AlignUp(buffer_size, uniform_buffer_offset_alignment) +
-                          sizeof(GSUniformData);
+            buffer_size += sizeof(GSUniformData);
         }
 
         size_t ptr_pos = 0;
         u8* buffer_ptr;
         GLintptr buffer_offset;
-        std::tie(buffer_ptr, buffer_offset) = stream_buffer->Map(
-            static_cast<GLsizeiptr>(buffer_size), std::max(4, uniform_buffer_offset_alignment));
+        std::tie(buffer_ptr, buffer_offset) =
+            stream_buffer->Map(static_cast<GLsizeiptr>(buffer_size), 4);
 
         SetupVertexArray(buffer_ptr, buffer_offset);
         ptr_pos += vs_input_size;
@@ -848,22 +857,36 @@ void RasterizerOpenGL::DrawTriangles() {
                 regs.pipeline.index_array.offset);
 
             std::memcpy(&buffer_ptr[ptr_pos], index_data, index_buffer_size);
-            index_buffer_offset = buffer_offset + static_cast<GLintptr>(ptr_pos);
 
+            index_buffer_offset = buffer_offset + static_cast<GLintptr>(ptr_pos);
             ptr_pos += index_buffer_size;
         }
 
-        ptr_pos = Common::AlignUp(ptr_pos, uniform_buffer_offset_alignment);
         SetupVertexShader(reinterpret_cast<VSUniformData*>(&buffer_ptr[ptr_pos]),
                           buffer_offset + static_cast<GLintptr>(ptr_pos));
+        const GLintptr vs_ubo_offset = buffer_offset + static_cast<GLintptr>(ptr_pos);
         ptr_pos += sizeof(VSUniformData);
 
-        ptr_pos = Common::AlignUp(ptr_pos, uniform_buffer_offset_alignment);
         SetupGeometryShader(use_gs ? reinterpret_cast<GSUniformData*>(&buffer_ptr[ptr_pos])
                                    : nullptr,
                             buffer_offset + static_cast<GLintptr>(ptr_pos));
+        const GLintptr gs_ubo_offset = buffer_offset + static_cast<GLintptr>(ptr_pos);
 
         stream_buffer->Unmap();
+
+        const auto copy_buffer = [&](GLuint handle, GLintptr offset, GLsizeiptr size) {
+            if (has_ARB_direct_state_access) {
+                glCopyNamedBufferSubData(stream_buffer->GetHandle(), handle, offset, 0, size);
+            } else {
+                glBindBuffer(GL_COPY_WRITE_BUFFER, handle);
+                glCopyBufferSubData(GL_ARRAY_BUFFER, GL_COPY_WRITE_BUFFER, offset, 0, size);
+            }
+        };
+
+        copy_buffer(vs_uniform_buffer.handle, vs_ubo_offset, sizeof(VSUniformData));
+        if (use_gs) {
+            copy_buffer(gs_uniform_buffer.handle, gs_ubo_offset, sizeof(GSUniformData));
+        }
 
         glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT, current_shader->shader.handle);
 

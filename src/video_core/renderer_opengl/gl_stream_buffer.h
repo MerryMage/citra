@@ -18,7 +18,7 @@ public:
     virtual void Create(size_t size, size_t sync_subdivide) = 0;
     virtual void Release() {}
 
-    GLuint GetHandle();
+    GLuint GetHandle() const;
 
     virtual std::pair<u8*, GLintptr> Map(size_t size, size_t alignment) = 0;
     virtual void Unmap() = 0;
