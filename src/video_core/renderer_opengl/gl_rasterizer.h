@@ -298,10 +298,10 @@ private:
     /// Syncs the specified light's distance attenuation scale to match the PICA register
     void SyncLightDistanceAttenuationScale(int light_index);
 
+    bool has_ARB_buffer_storage;
+    bool has_ARB_direct_state_access;
     bool has_ARB_separate_shader_objects;
     bool has_ARB_vertex_attrib_binding;
-    bool has_ARB_buffer_storage;
-    GLint uniform_buffer_offset_alignment;
 
     OpenGLState state;
 
@@ -373,12 +373,14 @@ private:
     void AnalyzeVertexArray(bool is_indexed);
     void SetupVertexArray(u8* array_ptr, GLintptr buffer_offset);
 
+    OGLBuffer vs_uniform_buffer;
     std::unordered_map<GLShader::PicaVSConfig, VertexShader*> vs_shader_map;
     std::unordered_map<std::string, VertexShader> vs_shader_cache;
     OGLShader vs_default_shader;
 
     void SetupVertexShader(VSUniformData* ub_ptr, GLintptr buffer_offset);
 
+    OGLBuffer gs_uniform_buffer;
     std::unordered_map<GLShader::PicaGSConfig, GeometryShader*> gs_shader_map;
     std::unordered_map<std::string, GeometryShader> gs_shader_cache;
     std::unordered_map<GLShader::PicaGSConfigCommon, GeometryShader> gs_default_shaders;
