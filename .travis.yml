@@ -18,9 +18,21 @@ matrix:
         apt:
           packages:
             - p7zip-full
-      install: "./.travis/linux/deps.sh"
-      script: "./.travis/linux/build.sh"
-      after_success: "./.travis/linux/upload.sh"
+      install: "./.travis/ubuntu-18.04/deps.sh"
+      script: "./.travis/ubuntu-18.04/build.sh"
+      after_success: "./.travis/ubuntu-18.04/upload.sh"
+    - os: linux
+      env: NAME="linux build"
+      sudo: required
+      dist: trusty
+      services: docker
+      addons:
+        apt:
+          packages:
+            - p7zip-full
+      install: "./.travis/ubuntu-16.04/deps.sh"
+      script: "./.travis/ubuntu-16.04/build.sh"
+      after_success: "./.travis/ubuntu-16.04/upload.sh"
     - if: branch = master AND type = push
       os: linux
       env: NAME="transifex push"
