@@ -1692,10 +1692,10 @@ void RasterizerOpenGL::SetShader() {
         } else {
             shader.shader.Create(GLShader::GenerateDefaultVertexShader(false).c_str(), nullptr,
                                  GLShader::GenerateFragmentShader(config, false).c_str());
-
-            state.draw.shader_program = shader.shader.handle;
-            state.Apply();
         }
+
+        state.draw.shader_program = shader.shader.handle;
+        state.Apply();
 
         // Set the texture samplers to correspond to different texture units
         GLint uniform_tex = glGetUniformLocation(shader.shader.handle, "tex0");
@@ -1749,6 +1749,11 @@ void RasterizerOpenGL::SetShader() {
             glGetUniformLocation(shader.shader.handle, "proctex_diff_lut");
         if (uniform_proctex_diff_lut != -1) {
             glUniform1i(uniform_proctex_diff_lut, TextureUnits::ProcTexDiffLUT.id);
+        }
+
+        if (has_ARB_separate_shader_objects) {
+            state.draw.shader_program = 0;
+            state.Apply();
         }
 
         SetShaderUniformBlockBindings(shader.shader.handle);
