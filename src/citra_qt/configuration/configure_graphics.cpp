@@ -20,8 +20,8 @@ ConfigureGraphics::ConfigureGraphics(QWidget* parent)
 
     ui->layoutBox->setEnabled(!Settings::values.custom_layout);
 
-    connect(ui->renderer_comboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            &ConfigureGraphics::UpdateRenderer);
+    connect(ui->renderer_comboBox, SIGNAL(currentIndexChanged(int)), this,
+            SLOT(UpdateRenderer(int)));
 }
 
 ConfigureGraphics::~ConfigureGraphics() {}
