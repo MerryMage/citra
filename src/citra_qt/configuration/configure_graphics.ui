@@ -155,12 +155,7 @@
                </item>
                <item>
                 <property name="text">
-                 <string>GPU (Partial)</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>GPU (Full)</string>
+                 <string>GPU</string>
                 </property>
                </item>
               </widget>

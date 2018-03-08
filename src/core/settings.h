@@ -11,7 +11,7 @@
 
 namespace Settings {
 
-enum class HwShaders { Off, VS, All };
+enum class HwShaders { Off, All, VS };
 
 enum class RenderBackend { Software, OpenGL };
 
