@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>400</width>
-    <height>300</height>
+    <height>444</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -19,64 +19,9 @@
      <item>
       <widget class="QGroupBox" name="groupBox">
        <property name="title">
-        <string>Graphics</string>
+        <string>General</string>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_2">
-        <item>
-         <widget class="QCheckBox" name="toggle_hw_renderer">
-          <property name="text">
-           <string>Enable hardware renderer</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_5">
-          <item>
-           <widget class="QLabel" name="label2">
-            <property name="text">
-             <string>Hardware shaders: </string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <layout class="QVBoxLayout" name="verticalLayout_5">
-            <item>
-             <widget class="QComboBox" name="hw_shaders">
-              <item>
-               <property name="text">
-                <string>Off</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Vertex Shaders</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Vertex + Geometry Shaders</string>
-               </property>
-              </item>
-             </widget>
-            </item>
-            <item>
-             <widget class="QCheckBox" name="accurate_mul">
-              <property name="text">
-               <string>Accurate MUL</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-         </layout>
-        </item>
-        <item>
-         <widget class="QCheckBox" name="toggle_shader_jit">
-          <property name="text">
-           <string>Enable shader JIT</string>
-          </property>
-         </widget>
-        </item>
         <item>
          <widget class="QCheckBox" name="toggle_vsync">
           <property name="text">
@@ -111,80 +56,208 @@
           </item>
          </layout>
         </item>
-        <item>
-         <layout class="QHBoxLayout" name="horizontalLayout">
-          <item>
-           <widget class="QLabel" name="label">
-            <property name="text">
-             <string>Internal Resolution:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QComboBox" name="resolution_factor_combobox">
-            <item>
-             <property name="text">
-              <string>Auto (Window Size)</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Native (400x240)</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>2x Native (800x480)</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>3x Native (1200x720)</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>4x Native (1600x960)</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>5x Native (2000x1200)</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>6x Native (2400x1440)</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>7x Native (2800x1680)</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>8x Native (3200x1920)</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>9x Native (3600x2160)</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>10x Native (4000x2400)</string>
-             </property>
-            </item>
-           </widget>
-          </item>
-         </layout>
-        </item>
        </layout>
       </widget>
      </item>
     </layout>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_2">
+     <property name="title">
+      <string>Renderer</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_6">
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_6">
+        <item>
+         <widget class="QLabel" name="label_2">
+          <property name="text">
+           <string>Backend</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="renderer_comboBox">
+          <item>
+           <property name="text">
+            <string>Software</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>OpenGL</string>
+           </property>
+          </item>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QWidget" name="software_render_group" native="true">
+        <layout class="QVBoxLayout" name="verticalLayout_9">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QCheckBox" name="software_shader_jit">
+           <property name="text">
+            <string>Enable Shader JIT</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QWidget" name="opengl_render_group" native="true">
+        <layout class="QVBoxLayout" name="verticalLayout_7">
+         <property name="spacing">
+          <number>6</number>
+         </property>
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <layout class="QVBoxLayout" name="verticalLayout_8">
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_5">
+             <item>
+              <widget class="QLabel" name="label2">
+               <property name="text">
+                <string>Shader Emulation</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QComboBox" name="hw_shaders">
+               <item>
+                <property name="text">
+                 <string>CPU</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>GPU (Partial)</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>GPU (Full)</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout">
+             <item>
+              <widget class="QLabel" name="label">
+               <property name="text">
+                <string>Internal Resolution:</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QComboBox" name="resolution_factor_combobox">
+               <item>
+                <property name="text">
+                 <string>Auto (Window Size)</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>Native (400x240)</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>2x Native (800x480)</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>3x Native (1200x720)</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>4x Native (1600x960)</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>5x Native (2000x1200)</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>6x Native (2400x1440)</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>7x Native (2800x1680)</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>8x Native (3200x1920)</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>9x Native (3600x2160)</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>10x Native (4000x2400)</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QCheckBox" name="accurate_hardware_shader">
+             <property name="text">
+              <string>Accurate Hardware Shader</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QCheckBox" name="opengl_shader_jit">
+             <property name="text">
+              <string>Enable Shader JIT</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
    </item>
    <item>
     <widget class="QGroupBox" name="layoutBox">
@@ -257,12 +330,5 @@
   </layout>
  </widget>
  <resources/>
- <connections>
-  <connection>
-   <sender>toggle_hw_renderer</sender>
-   <signal>toggled(bool)</signal>
-   <receiver>resolution_factor_combobox</receiver>
-   <slot>setEnabled(bool)</slot>
-  </connection>
- </connections>
+ <connections/>
 </ui>

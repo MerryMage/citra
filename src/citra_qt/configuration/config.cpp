@@ -81,7 +81,8 @@ void Config::ReadValues() {
     qt_config->endGroup();
 
     qt_config->beginGroup("Renderer");
-    Settings::values.use_hw_renderer = qt_config->value("use_hw_renderer", true).toBool();
+    Settings::values.renderer =
+        static_cast<Settings::RenderBackend>(qt_config->value("renderer", 1).toInt());
     Settings::values.hw_shaders =
         static_cast<Settings::HwShaders>(qt_config->value("hw_shaders").toInt());
     Settings::values.shaders_accurate_mul = qt_config->value("shaders_accurate_mul", true).toBool();
@@ -250,7 +251,7 @@ void Config::SaveValues() {
     qt_config->endGroup();
 
     qt_config->beginGroup("Renderer");
-    qt_config->setValue("use_hw_renderer", Settings::values.use_hw_renderer);
+    qt_config->setValue("renderer", static_cast<int>(Settings::values.renderer));
     qt_config->setValue("hw_shaders", static_cast<int>(Settings::values.hw_shaders));
     qt_config->setValue("shaders_accurate_mul", Settings::values.shaders_accurate_mul);
     qt_config->setValue("use_shader_jit", Settings::values.use_shader_jit);

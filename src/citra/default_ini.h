@@ -73,8 +73,16 @@ use_cpu_jit =
 
 [Renderer]
 # Whether to use software or hardware rendering.
-# 0: Software, 1 (default): Hardware
-use_hw_renderer =
+# 0: Software, 1 (default): OpenGL
+renderer =
+
+# Selects the way the 3ds shaders will be emulated. 0 is on the CPU and >0 is on the host GPU with GLSL
+# 0: CPU Shaders, 1: VS Only, 2: VS & GS (Default)
+hw_shaders =
+
+# Whether to use accurate multiplication in GLSL shaders
+# 0: Off (Faster, but causes issues in some games) 1: On (Default. Slower, but correct)
+shaders_accurate_mul =
 
 # Whether to use the Just-In-Time (JIT) compiler for shader emulation
 # 0: Interpreter (slow), 1 (default): JIT (fast)

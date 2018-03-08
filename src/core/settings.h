@@ -11,11 +11,9 @@
 
 namespace Settings {
 
-enum class HwShaders {
-    Off,
-    VS,
-    All
-};
+enum class HwShaders { Off, VS, All };
+
+enum class RenderBackend { Software, OpenGL };
 
 enum class LayoutOption {
     Default,
@@ -112,7 +110,7 @@ struct Values {
     int region_value;
 
     // Renderer
-    bool use_hw_renderer;
+    RenderBackend renderer;
     HwShaders hw_shaders;
     bool shaders_accurate_mul;
     bool use_shader_jit;
