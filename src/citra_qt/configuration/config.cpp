@@ -84,7 +84,7 @@ void Config::ReadValues() {
     Settings::values.renderer =
         static_cast<Settings::RenderBackend>(qt_config->value("renderer", 1).toInt());
     Settings::values.hw_shaders =
-        static_cast<Settings::HwShaders>(qt_config->value("hw_shaders").toInt());
+        static_cast<Settings::HwShaders>(qt_config->value("hw_shaders", 1).toInt());
     Settings::values.shaders_accurate_mul = qt_config->value("shaders_accurate_mul", true).toBool();
     Settings::values.use_shader_jit = qt_config->value("use_shader_jit", true).toBool();
     Settings::values.resolution_factor =
