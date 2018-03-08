@@ -21,7 +21,7 @@ void Apply() {
     GDBStub::SetServerPort(values.gdbstub_port);
     GDBStub::ToggleServer(values.use_gdbstub);
 
-    VideoCore::g_hw_renderer_enabled = values.use_hw_renderer;
+    VideoCore::g_renderer_selection = static_cast<VideoCore::Renderer>(values.renderer);
     VideoCore::g_shader_jit_enabled = values.use_shader_jit;
 
     if (VideoCore::g_emu_window) {
