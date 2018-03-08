@@ -97,7 +97,7 @@ void Config::ReadValues() {
     Settings::values.renderer =
         static_cast<Settings::RenderBackend>(sdl2_config->GetInteger("Renderer", "renderer", 1));
     Settings::values.hw_shaders =
-        static_cast<Settings::HwShaders>(sdl2_config->GetInteger("Renderer", "hw_shaders", 0));
+        static_cast<Settings::HwShaders>(sdl2_config->GetInteger("Renderer", "hw_shaders", 1));
     Settings::values.shaders_accurate_mul =
         sdl2_config->GetBoolean("Renderer", "shaders_accurate_mul", true);
     Settings::values.use_shader_jit = sdl2_config->GetBoolean("Renderer", "use_shader_jit", true);

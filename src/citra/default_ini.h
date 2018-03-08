@@ -77,7 +77,7 @@ use_cpu_jit =
 renderer =
 
 # Selects the way the 3ds shaders will be emulated. 0 is on the CPU and >0 is on the host GPU with GLSL
-# 0: CPU Shaders, 1: VS Only, 2: VS & GS (Default)
+# 0: CPU Shaders, 1: VS & GS (Default), 2: VS Only
 hw_shaders =
 
 # Whether to use accurate multiplication in GLSL shaders
