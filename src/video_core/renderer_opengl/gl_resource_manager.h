@@ -91,10 +91,12 @@ public:
     }
 
     /// Creates a new internal OpenGL resource and stores the handle
-    void Create(const char* vert_shader, const char* frag_shader) {
+    void Create(const char* vert_shader, const char* geo_shader, const char* frag_shader,
+                const std::vector<const char*>& feedback_vars = {},
+                bool separable_program = false) {
         if (handle != 0)
             return;
-        handle = GLShader::LoadProgram(vert_shader, frag_shader);
+        handle = GLShader::LoadProgram(vert_shader, geo_shader, frag_shader, feedback_vars, separable_program);
     }
 
     /// Deletes the internal OpenGL resource

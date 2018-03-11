@@ -1206,7 +1206,7 @@ void RasterizerOpenGL::SetShader() {
     } else {
         LOG_DEBUG(Render_OpenGL, "Creating new shader");
 
-        shader->shader.Create(GLShader::GenerateVertexShader().c_str(),
+        shader->shader.Create(GLShader::GenerateVertexShader().c_str(), nullptr,
                               GLShader::GenerateFragmentShader(config).c_str());
 
         state.draw.shader_program = shader->shader.handle;
