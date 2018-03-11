@@ -50,6 +50,7 @@ public:
     bool AccelerateFill(const GPU::Regs::MemoryFillConfig& config) override;
     bool AccelerateDisplay(const GPU::Regs::FramebufferConfig& config, PAddr framebuffer_addr,
                            u32 pixel_stride, ScreenInfo& screen_info) override;
+    bool AccelerateDrawBatch(bool is_indexed) override;
 
     /// OpenGL shader generated for a given Pica register state
     struct PicaShader {
@@ -378,4 +379,7 @@ private:
     std::unordered_map<GLShader::PicaGSConfigCommon, GeometryShader> gs_default_shaders;
 
     void SetupGeometryShader();
+
+    enum class AccelDraw { Disabled, Arrays, Indexed };
+    AccelDraw accelerate_draw;
 };

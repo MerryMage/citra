@@ -240,6 +240,8 @@ RasterizerOpenGL::RasterizerOpenGL() : shader_dirty(true) {
         SetShaderUniformBlockBindings(vs_default_shader.handle);
     }
 
+    accelerate_draw = AccelDraw::Disabled;
+
     glEnable(GL_BLEND);
 
     // Sync fixed function OpenGL state
@@ -513,8 +515,45 @@ void RasterizerOpenGL::SetupGeometryShader() {
     glUseProgramStages(pipeline.handle, GL_GEOMETRY_SHADER_BIT, shader);
 }
 
+bool RasterizerOpenGL::AccelerateDrawBatch(bool is_indexed) {
+    if (!separate_shaders_ext_supported) {
+        LOG_CRITICAL(Render_OpenGL,
+                     "GL_ARB_separate_shader_objects extension unsupported, disabling HW shaders");
+        Settings::values.hw_shaders = Settings::HwShaders::Off;
+        return false;
+    }
+
+    const auto& regs = Pica::g_state.regs;
+    if (regs.pipeline.use_gs != Pica::PipelineRegs::UseGS::No) {
+        if (regs.pipeline.gs_config.mode != Pica::PipelineRegs::GSMode::Point) {
+            return false;
+        }
+        if ((regs.gs.max_input_attribute_index + 1) %
+                (regs.pipeline.vs_outmap_total_minus_1_a + 1) !=
+            0) {
+            return false;
+        }
+        switch ((regs.gs.max_input_attribute_index + 1) /
+                (regs.pipeline.vs_outmap_total_minus_1_a + 1)) {
+        case 1: // GL_POINTS
+        case 2: // GL_LINES
+        case 4: // GL_LINES_ADJACENCY
+        case 3: // GL_TRIANGLES
+        case 6: // GL_TRIANGLES_ADJACENCY
+            break;
+        default:
+            return false;
+        }
+    }
+
+    accelerate_draw = is_indexed ? AccelDraw::Indexed : AccelDraw::Arrays;
+    DrawTriangles();
+
+    return true;
+}
+
 void RasterizerOpenGL::DrawTriangles() {
-    if (vertex_batch.empty())
+    if (vertex_batch.empty() && accelerate_draw == AccelDraw::Disabled)
         return;
 
     MICROPROFILE_SCOPE(OpenGL_Drawing);
@@ -726,26 +765,86 @@ void RasterizerOpenGL::DrawTriangles() {
     state.Apply();
 
     // Draw the vertex batch
-    state.draw.vertex_array = sw_vao.handle;
-    state.draw.vertex_buffer = vertex_buffer.handle;
-    if (separate_shaders_ext_supported) {
-        glUseProgramStages(pipeline.handle, GL_VERTEX_SHADER_BIT, vs_default_shader.handle);
-        glUseProgramStages(pipeline.handle, GL_GEOMETRY_SHADER_BIT, 0);
-        glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT,
-                           current_shader->shader.handle);
-    } else {
-        state.draw.shader_program = current_shader->shader.handle;
-    }
-    state.Apply();
+    if (accelerate_draw != AccelDraw::Disabled) {
+        GLenum primitive_mode;
+        switch (regs.pipeline.triangle_topology) {
+        case Pica::PipelineRegs::TriangleTopology::Shader:
+        case Pica::PipelineRegs::TriangleTopology::List:
+            primitive_mode = GL_TRIANGLES;
+            break;
+        case Pica::PipelineRegs::TriangleTopology::Fan:
+            primitive_mode = GL_TRIANGLE_FAN;
+            break;
+        case Pica::PipelineRegs::TriangleTopology::Strip:
+            primitive_mode = GL_TRIANGLE_STRIP;
+            break;
+        default:
+            UNREACHABLE();
+        }
 
-    glBufferData(GL_ARRAY_BUFFER, vertex_batch.size() * sizeof(HardwareVertex),
-                 vertex_batch.data(), GL_STREAM_DRAW);
-    glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(vertex_batch.size()));
+        if (regs.pipeline.use_gs == Pica::PipelineRegs::UseGS::Yes) {
+            switch ((regs.gs.max_input_attribute_index + 1) /
+                    (regs.pipeline.vs_outmap_total_minus_1_a + 1)) {
+            case 1:
+                primitive_mode = GL_POINTS;
+                break;
+            case 2:
+                primitive_mode = GL_LINES;
+                break;
+            case 4:
+                primitive_mode = GL_LINES_ADJACENCY;
+                break;
+            case 3:
+                primitive_mode = GL_TRIANGLES;
+                break;
+            case 6:
+                primitive_mode = GL_TRIANGLES_ADJACENCY;
+                break;
+            default:
+                UNREACHABLE();
+            }
+        }
+
+        SetupVertexShader(accelerate_draw == AccelDraw::Indexed);
+        SetupGeometryShader();
+        glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT, current_shader->shader.handle);
+
+        if (accelerate_draw == AccelDraw::Indexed) {
+            const auto& index_info = regs.pipeline.index_array;
+            const u8* index_buffer = Memory::GetPhysicalPointer(
+                regs.pipeline.vertex_attributes.GetPhysicalBaseAddress() + index_info.offset);
+            bool index_u16 = index_info.format != 0;
+
+            glDrawRangeElementsBaseVertex(primitive_mode, vs_input_index_start, vs_input_index_end,
+                                          regs.pipeline.num_vertices,
+                                          index_u16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE,
+                                          index_buffer, -vs_input_index_start);
+        } else {
+            glDrawArrays(primitive_mode, 0, regs.pipeline.num_vertices);
+        }
+    } else {
+        state.draw.vertex_array = sw_vao.handle;
+        state.draw.vertex_buffer = vertex_buffer.handle;
+        if (separate_shaders_ext_supported) {
+            glUseProgramStages(pipeline.handle, GL_VERTEX_SHADER_BIT, vs_default_shader.handle);
+            glUseProgramStages(pipeline.handle, GL_GEOMETRY_SHADER_BIT, 0);
+            glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT,
+                               current_shader->shader.handle);
+        } else {
+            state.draw.shader_program = current_shader->shader.handle;
+        }
+        state.Apply();
+
+        glBufferData(GL_ARRAY_BUFFER, vertex_batch.size() * sizeof(HardwareVertex),
+                     vertex_batch.data(), GL_STREAM_DRAW);
+        glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(vertex_batch.size()));
+    }
 
     // Disable scissor test
     state.scissor.enabled = false;
 
     vertex_batch.clear();
+    accelerate_draw = AccelDraw::Disabled;
 
     // Unbind textures for potential future use as framebuffer attachments
     for (unsigned texture_index = 0; texture_index < pica_textures.size(); ++texture_index) {
