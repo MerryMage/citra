@@ -57,67 +57,12 @@ public:
         OGLShader shader;
     };
 
-private:
-    struct SamplerInfo {
-        using TextureConfig = Pica::TexturingRegs::TextureConfig;
-
-        OGLSampler sampler;
-
-        /// Creates the sampler object, initializing its state so that it's in sync with the
-        /// SamplerInfo struct.
-        void Create();
-        /// Syncs the sampler object with the config, updating any necessary state.
-        void SyncWithConfig(const TextureConfig& config);
-
-    private:
-        TextureConfig::TextureFilter mag_filter;
-        TextureConfig::TextureFilter min_filter;
-        TextureConfig::WrapMode wrap_s;
-        TextureConfig::WrapMode wrap_t;
-        u32 border_color;
+    struct VertexShader {
+        OGLShader shader;
     };
 
-    /// Structure that the hardware rendered vertices are composed of
-    struct HardwareVertex {
-        HardwareVertex(const Pica::Shader::OutputVertex& v, bool flip_quaternion) {
-            position[0] = v.pos.x.ToFloat32();
-            position[1] = v.pos.y.ToFloat32();
-            position[2] = v.pos.z.ToFloat32();
-            position[3] = v.pos.w.ToFloat32();
-            color[0] = v.color.x.ToFloat32();
-            color[1] = v.color.y.ToFloat32();
-            color[2] = v.color.z.ToFloat32();
-            color[3] = v.color.w.ToFloat32();
-            tex_coord0[0] = v.tc0.x.ToFloat32();
-            tex_coord0[1] = v.tc0.y.ToFloat32();
-            tex_coord1[0] = v.tc1.x.ToFloat32();
-            tex_coord1[1] = v.tc1.y.ToFloat32();
-            tex_coord2[0] = v.tc2.x.ToFloat32();
-            tex_coord2[1] = v.tc2.y.ToFloat32();
-            tex_coord0_w = v.tc0_w.ToFloat32();
-            normquat[0] = v.quat.x.ToFloat32();
-            normquat[1] = v.quat.y.ToFloat32();
-            normquat[2] = v.quat.z.ToFloat32();
-            normquat[3] = v.quat.w.ToFloat32();
-            view[0] = v.view.x.ToFloat32();
-            view[1] = v.view.y.ToFloat32();
-            view[2] = v.view.z.ToFloat32();
-
-            if (flip_quaternion) {
-                for (float& x : normquat) {
-                    x = -x;
-                }
-            }
-        }
-
-        GLvec4 position;
-        GLvec4 color;
-        GLvec2 tex_coord0;
-        GLvec2 tex_coord1;
-        GLvec2 tex_coord2;
-        GLfloat tex_coord0_w;
-        GLvec4 normquat;
-        GLvec3 view;
+    struct GeometryShader {
+        OGLShader shader;
     };
 
     struct LightSrc {
@@ -160,6 +105,96 @@ private:
         "The size of the UniformData structure has changed, update the structure in the shader");
     static_assert(sizeof(UniformData) < 16384,
                   "UniformData structure must be less than 16kb as per the OpenGL spec");
+
+    struct PicaUniformsData {
+        struct {
+            alignas(16) GLuint b;
+        } bools[16];
+        alignas(16) std::array<GLuvec4, 4> i;
+        alignas(16) std::array<GLvec4, 96> f;
+    };
+
+    struct VSUniformData {
+        PicaUniformsData uniforms;
+    };
+    static_assert(
+        sizeof(VSUniformData) == 1856,
+        "The size of the VSUniformData structure has changed, update the structure in the shader");
+    static_assert(sizeof(VSUniformData) < 16384,
+                  "VSUniformData structure must be less than 16kb as per the OpenGL spec");
+
+    struct GSUniformData {
+        PicaUniformsData uniforms;
+    };
+    static_assert(
+        sizeof(GSUniformData) == 1856,
+        "The size of the GSUniformData structure has changed, update the structure in the shader");
+    static_assert(sizeof(GSUniformData) < 16384,
+                  "GSUniformData structure must be less than 16kb as per the OpenGL spec");
+
+private:
+    struct SamplerInfo {
+        using TextureConfig = Pica::TexturingRegs::TextureConfig;
+
+        OGLSampler sampler;
+
+        /// Creates the sampler object, initializing its state so that it's in sync with the
+        /// SamplerInfo struct.
+        void Create();
+        /// Syncs the sampler object with the config, updating any necessary state.
+        void SyncWithConfig(const TextureConfig& config);
+
+    private:
+        TextureConfig::TextureFilter mag_filter;
+        TextureConfig::TextureFilter min_filter;
+        TextureConfig::WrapMode wrap_s;
+        TextureConfig::WrapMode wrap_t;
+        u32 border_color;
+    };
+
+    /// Structure that the hardware rendered vertices are composed of
+    struct HardwareVertex {
+        HardwareVertex() = default;
+        HardwareVertex(const Pica::Shader::OutputVertex& v, bool flip_quaternion) {
+            position[0] = v.pos.x.ToFloat32();
+            position[1] = v.pos.y.ToFloat32();
+            position[2] = v.pos.z.ToFloat32();
+            position[3] = v.pos.w.ToFloat32();
+            color[0] = v.color.x.ToFloat32();
+            color[1] = v.color.y.ToFloat32();
+            color[2] = v.color.z.ToFloat32();
+            color[3] = v.color.w.ToFloat32();
+            tex_coord0[0] = v.tc0.x.ToFloat32();
+            tex_coord0[1] = v.tc0.y.ToFloat32();
+            tex_coord1[0] = v.tc1.x.ToFloat32();
+            tex_coord1[1] = v.tc1.y.ToFloat32();
+            tex_coord2[0] = v.tc2.x.ToFloat32();
+            tex_coord2[1] = v.tc2.y.ToFloat32();
+            tex_coord0_w = v.tc0_w.ToFloat32();
+            normquat[0] = v.quat.x.ToFloat32();
+            normquat[1] = v.quat.y.ToFloat32();
+            normquat[2] = v.quat.z.ToFloat32();
+            normquat[3] = v.quat.w.ToFloat32();
+            view[0] = v.view.x.ToFloat32();
+            view[1] = v.view.y.ToFloat32();
+            view[2] = v.view.z.ToFloat32();
+
+            if (flip_quaternion) {
+                for (float& x : normquat) {
+                    x = -x;
+                }
+            }
+        }
+
+        GLvec4 position;
+        GLvec4 color;
+        GLvec2 tex_coord0;
+        GLvec2 tex_coord1;
+        GLvec2 tex_coord2;
+        GLfloat tex_coord0_w;
+        GLvec4 normquat;
+        GLvec3 view;
+    };
 
     /// Syncs the clip enabled status to match the PICA register
     void SyncClipEnabled();
@@ -259,13 +294,14 @@ private:
     /// Syncs the specified light's distance attenuation scale to match the PICA register
     void SyncLightDistanceAttenuationScale(int light_index);
 
+    bool separate_shaders_ext_supported;
     OpenGLState state;
 
     RasterizerCacheOpenGL res_cache;
 
     std::vector<HardwareVertex> vertex_batch;
 
-    std::unordered_map<GLShader::PicaShaderConfig, std::unique_ptr<PicaShader>> shader_cache;
+    std::unordered_map<GLShader::PicaShaderConfig, PicaShader> shader_cache;
     const PicaShader* current_shader = nullptr;
     bool shader_dirty;
 
@@ -281,8 +317,12 @@ private:
         bool dirty;
     } uniform_block_data = {};
 
+    OGLPipeline pipeline;
+    OGLVertexArray sw_vao;
+    OGLVertexArray hw_vao;
+    std::array<bool, 16> hw_vao_enabled_attributes;
+
     std::array<SamplerInfo, 3> texture_samplers;
-    OGLVertexArray vertex_array;
     OGLBuffer vertex_buffer;
     OGLBuffer uniform_buffer;
     OGLFramebuffer framebuffer;
@@ -314,4 +354,28 @@ private:
     OGLBuffer proctex_diff_lut_buffer;
     OGLTexture proctex_diff_lut;
     std::array<GLvec4, 256> proctex_diff_lut_data{};
+
+    OGLBuffer vs_input_buffer;
+    GLsizeiptr vs_input_buffer_size;
+
+    GLint vs_input_index_start;
+    GLint vs_input_index_end;
+
+    OGLBuffer vs_uniform;
+    VSUniformData vs_uniform_data;
+
+    std::unordered_map<GLShader::PicaVSConfig, VertexShader*> vs_shader_map;
+    std::unordered_map<std::string, VertexShader> vs_shader_cache;
+    OGLShader vs_default_shader;
+
+    void SetupVertexShader(bool is_indexed);
+
+    OGLBuffer gs_uniform;
+    GSUniformData gs_uniform_data;
+
+    std::unordered_map<GLShader::PicaGSConfig, GeometryShader*> gs_shader_map;
+    std::unordered_map<std::string, GeometryShader> gs_shader_cache;
+    std::unordered_map<GLShader::PicaGSConfigCommon, GeometryShader> gs_default_shaders;
+
+    void SetupGeometryShader();
 };
