@@ -180,14 +180,14 @@ public:
 class OGLSync : private NonCopyable {
 public:
     OGLSync() = default;
-    OGLSync(OGLSync&& o) {
-        std::swap(handle, o.handle);
-    }
+    OGLSync(OGLSync&& o) : handle(std::exchange(o.handle, nullptr)) {}
+
     ~OGLSync() {
         Release();
     }
+
     OGLSync& operator=(OGLSync&& o) {
-        std::swap(handle, o.handle);
+        handle = std::exchange(o.handle, nullptr);
         return *this;
     }
 

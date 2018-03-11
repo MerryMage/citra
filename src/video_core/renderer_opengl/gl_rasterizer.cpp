@@ -292,11 +292,13 @@ RasterizerOpenGL::RasterizerOpenGL() {
 }
 
 RasterizerOpenGL::~RasterizerOpenGL() {
-    if (stream_buffer != nullptr) {
-        state.draw.vertex_buffer = stream_buffer->GetHandle();
-        state.Apply();
-        stream_buffer->Release();
+    if (stream_buffer == nullptr) {
+        return;
     }
+
+    state.draw.vertex_buffer = stream_buffer->GetHandle();
+    state.Apply();
+    stream_buffer->Release();
 }
 
 /**
