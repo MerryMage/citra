@@ -40,6 +40,8 @@ void EmuThread::run() {
 
     Common::CrashHandler(
         [&]() {
+            ASSERT(false);
+
             // Holds whether the cpu was running during the last iteration,
             // so that the DebugModeLeft signal can be emitted before the
             // next execution step.
