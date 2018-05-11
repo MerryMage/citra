@@ -134,29 +134,28 @@ void Module::UpdatePadCallback(u64 userdata, int cycles_late) {
         mem->pad.index_reset_ticks = (s64)CoreTiming::GetTicks();
     }
 
-    mem->touch.index = next_touch_index;
-    next_touch_index = (next_touch_index + 1) % mem->touch.entries.size();
-
     // Get the current touch entry
-    TouchDataEntry& touch_entry = mem->touch.entries[mem->touch.index];
-    bool pressed = false;
-    float x, y;
-    std::tie(x, y, pressed) = touch_device->GetStatus();
-    touch_entry.x = static_cast<u16>(x * Core::kScreenBottomWidth);
-    touch_entry.y = static_cast<u16>(y * Core::kScreenBottomHeight);
-    touch_entry.valid.Assign(pressed ? 1 : 0);
+    for (auto [x, y, pressed] : touch_device->GetStatus()) {
+        mem->touch.index = next_touch_index;
+        next_touch_index = (next_touch_index + 1) % mem->touch.entries.size();
 
-    Core::Movie::GetInstance().HandleTouchStatus(touch_entry);
+        TouchDataEntry& touch_entry = mem->touch.entries[mem->touch.index];
+        touch_entry.x = static_cast<u16>(x * Core::kScreenBottomWidth);
+        touch_entry.y = static_cast<u16>(y * Core::kScreenBottomHeight);
+        touch_entry.valid.Assign(pressed ? 1 : 0);
+
+        Core::Movie::GetInstance().HandleTouchStatus(touch_entry);
+
+        // If we just updated index 0, provide a new timestamp
+        if (mem->touch.index == 0) {
+            mem->touch.index_reset_ticks_previous = mem->touch.index_reset_ticks;
+            mem->touch.index_reset_ticks = (s64)CoreTiming::GetTicks();
+        }
+    }
 
     // TODO(bunnei): We're not doing anything with offset 0xA8 + 0x18 of HID SharedMemory, which
     // supposedly is "Touch-screen entry, which contains the raw coordinate data prior to being
     // converted to pixel coordinates." (http://3dbrew.org/wiki/HID_Shared_Memory#Offset_0xA8).
-
-    // If we just updated index 0, provide a new timestamp
-    if (mem->touch.index == 0) {
-        mem->touch.index_reset_ticks_previous = mem->touch.index_reset_ticks;
-        mem->touch.index_reset_ticks = (s64)CoreTiming::GetTicks();
-    }
 
     // Signal both handles when there's an update to Pad or touch
     event_pad_or_touch_1->Signal();

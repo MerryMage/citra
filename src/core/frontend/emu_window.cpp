@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <mutex>
+#include <utility>
 #include "core/frontend/emu_window.h"
 #include "core/frontend/input.h"
 #include "core/settings.h"
@@ -15,23 +16,32 @@ public:
         return std::make_unique<Device>(shared_from_this());
     }
 
-    std::mutex mutex;
+    bool IsPressed() const {
+        return currently_pressed;
+    }
 
-    bool touch_pressed = false; ///< True if touchpad area is currently pressed, otherwise false
-
-    float touch_x = 0.0f; ///< Touchpad X-position
-    float touch_y = 0.0f; ///< Touchpad Y-position
+    void AddTouch(float touch_x, float touch_y, bool touch_pressed) {
+        std::lock_guard<std::mutex> guard(mutex);
+        previous_touches.emplace_back(touch_x, touch_y, touch_pressed);
+        currently_pressed = touch_pressed;
+    }
 
 private:
+    std::mutex mutex;
+    std::vector<std::tuple<float, float, bool>> previous_touches;
+
+    bool currently_pressed = false;
+
     class Device : public Input::TouchDevice {
     public:
         explicit Device(std::weak_ptr<TouchState>&& touch_state) : touch_state(touch_state) {}
-        std::tuple<float, float, bool> GetStatus() const override {
+        std::vector<std::tuple<float, float, bool>> GetStatus() const override {
             if (auto state = touch_state.lock()) {
                 std::lock_guard<std::mutex> guard(state->mutex);
-                return std::make_tuple(state->touch_x, state->touch_y, state->touch_pressed);
+                return std::exchange(state->previous_touches,
+                                     std::vector<std::tuple<float, float, bool>>{});
             }
-            return std::make_tuple(0.0f, 0.0f, false);
+            return {std::make_tuple(0.0f, 0.0f, false)};
         }
 
     private:
@@ -79,26 +89,22 @@ void EmuWindow::TouchPressed(unsigned framebuffer_x, unsigned framebuffer_y) {
     if (!IsWithinTouchscreen(framebuffer_layout, framebuffer_x, framebuffer_y))
         return;
 
-    std::lock_guard<std::mutex> guard(touch_state->mutex);
-    touch_state->touch_x =
+    const float touch_x =
         static_cast<float>(framebuffer_x - framebuffer_layout.bottom_screen.left) /
         (framebuffer_layout.bottom_screen.right - framebuffer_layout.bottom_screen.left);
-    touch_state->touch_y =
+    const float touch_y =
         static_cast<float>(framebuffer_y - framebuffer_layout.bottom_screen.top) /
         (framebuffer_layout.bottom_screen.bottom - framebuffer_layout.bottom_screen.top);
 
-    touch_state->touch_pressed = true;
+    touch_state->AddTouch(touch_x, touch_y, true);
 }
 
 void EmuWindow::TouchReleased() {
-    std::lock_guard<std::mutex> guard(touch_state->mutex);
-    touch_state->touch_pressed = false;
-    touch_state->touch_x = 0;
-    touch_state->touch_y = 0;
+    touch_state->AddTouch(0, 0, false);
 }
 
 void EmuWindow::TouchMoved(unsigned framebuffer_x, unsigned framebuffer_y) {
-    if (!touch_state->touch_pressed)
+    if (!touch_state->IsPressed())
         return;
 
     if (!IsWithinTouchscreen(framebuffer_layout, framebuffer_x, framebuffer_y))
