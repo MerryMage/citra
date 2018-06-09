@@ -49,6 +49,13 @@ matrix:
       services: docker
       cache: ccache
       script: "./.travis/linux-frozen/build.sh"
+    - os: linux
+      env: NAME="aarch64 build"
+      sudo: required
+      dist: trusty
+      services: docker
+      cache: ccache
+      script: "./.travis/aarch64/build.sh"
 
 deploy:
   provider: releases
