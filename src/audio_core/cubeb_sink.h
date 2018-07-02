@@ -17,9 +17,7 @@ public:
 
     unsigned int GetNativeSampleRate() const override;
 
-    void EnqueueSamples(const s16* samples, size_t sample_count) override;
-
-    size_t SamplesInQueue() const override;
+    void SetCallback(std::function<void(s16* buffer, size_t num_frames)> cb) override;
 
 private:
     struct Impl;

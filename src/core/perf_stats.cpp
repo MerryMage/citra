@@ -40,6 +40,10 @@ void PerfStats::EndGameFrame() {
     game_frames += 1;
 }
 
+double PerfStats::GetAverageEmulationSpeed() const {
+    return average_speed;
+}
+
 PerfStats::Results PerfStats::GetAndResetStats(u64 current_system_time_us) {
     std::lock_guard<std::mutex> lock(object_mutex);
 
@@ -56,6 +60,10 @@ PerfStats::Results PerfStats::GetAndResetStats(u64 current_system_time_us) {
     results.frametime = duration_cast<DoubleSecs>(accumulated_frametime).count() /
                         static_cast<double>(system_frames);
     results.emulation_speed = system_us_per_second / 1'000'000.0;
+
+    // Calculate average emulation speed
+    // Smoothed over an exponential window with half-life of about 2 seconds
+    average_speed += (interval * 0.5) * (results.emulation_speed - average_speed);
 
     // Reset counters
     reset_point = now;

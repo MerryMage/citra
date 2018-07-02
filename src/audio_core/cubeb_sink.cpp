@@ -12,12 +12,11 @@ namespace AudioCore {
 
 struct CubebSink::Impl {
     unsigned int sample_rate = 0;
-    std::vector<std::string> device_list;
 
     cubeb* ctx = nullptr;
     cubeb_stream* stream = nullptr;
 
-    std::vector<s16> queue;
+    std::function<void(s16* buffer, size_t num_frames)> cb;
 
     static long DataCallback(cubeb_stream* stream, void* user_data, const void* input_buffer,
                              void* output_buffer, long num_frames);
@@ -93,41 +92,21 @@ unsigned int CubebSink::GetNativeSampleRate() const {
     return impl->sample_rate;
 }
 
-void CubebSink::EnqueueSamples(const s16* samples, size_t sample_count) {
-    if (!impl->ctx)
-        return;
-
-    impl->queue.reserve(impl->queue.size() + sample_count * 2);
-    std::copy(samples, samples + sample_count * 2, std::back_inserter(impl->queue));
-}
-
-size_t CubebSink::SamplesInQueue() const {
-    if (!impl->ctx)
-        return 0;
-
-    return impl->queue.size() / 2;
+void CubebSink::SetCallback(std::function<void(s16* buffer, size_t num_frames)> cb) {
+    impl->cb = cb;
 }
 
 long CubebSink::Impl::DataCallback(cubeb_stream* stream, void* user_data, const void* input_buffer,
                                    void* output_buffer, long num_frames) {
     Impl* impl = static_cast<Impl*>(user_data);
-    u8* buffer = reinterpret_cast<u8*>(output_buffer);
+    s16* buffer = reinterpret_cast<s16*>(output_buffer);
 
     if (!impl)
         return 0;
 
-    size_t frames_to_write = std::min(impl->queue.size() / 2, static_cast<size_t>(num_frames));
-
-    memcpy(buffer, impl->queue.data(), frames_to_write * sizeof(s16) * 2);
-    impl->queue.erase(impl->queue.begin(), impl->queue.begin() + frames_to_write * 2);
-
-    if (frames_to_write < num_frames) {
-        // Fill the rest of the frames with silence
-        memset(buffer + frames_to_write * sizeof(s16) * 2, 0,
-               (num_frames - frames_to_write) * sizeof(s16) * 2);
+    if (impl->cb) {
+        impl->cb(buffer, num_frames);
     }
-
-    return num_frames;
 }
 
 void CubebSink::Impl::StateCallback(cubeb_stream* stream, void* user_data, cubeb_state state) {}

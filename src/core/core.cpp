@@ -136,6 +136,10 @@ void System::PrepareReschedule() {
     reschedule_pending = true;
 }
 
+double System::GetAverageEmulationSpeed() const {
+    return perf_stats.GetAverageEmulationSpeed();
+}
+
 PerfStats::Results System::GetAndResetPerfStats() {
     return perf_stats.GetAndResetStats(CoreTiming::GetGlobalTimeUs());
 }

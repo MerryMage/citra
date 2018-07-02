@@ -102,6 +102,7 @@ public:
     /// Prepare the core emulation for a reschedule
     void PrepareReschedule();
 
+    double GetAverageEmulationSpeed() const;
     PerfStats::Results GetAndResetPerfStats();
 
     /**

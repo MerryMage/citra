@@ -33,6 +33,7 @@ public:
     void EndSystemFrame();
     void EndGameFrame();
 
+    double GetAverageEmulationSpeed() const;
     Results GetAndResetStats(u64 current_system_time_us);
 
     /**
@@ -62,6 +63,8 @@ private:
     Clock::time_point frame_begin = reset_point;
     /// Total visible duration (including frame-limiting, etc.) of the previous system frame
     Clock::duration previous_frame_length = Clock::duration::zero();
+
+    double average_speed = 1.0;
 };
 
 class FrameLimiter {

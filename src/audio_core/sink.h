@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <functional>
 #include <vector>
 #include "common/common_types.h"
 
@@ -23,14 +24,10 @@ public:
     virtual unsigned int GetNativeSampleRate() const = 0;
 
     /**
-     * Feed stereo samples to sink.
-     * @param samples Samples in interleaved stereo PCM16 format.
-     * @param sample_count Number of samples.
+     * Set the audio data callback.
+     * @param cb Function that fills the buffer with num_frames samples.
      */
-    virtual void EnqueueSamples(const s16* samples, size_t sample_count) = 0;
-
-    /// Samples enqueued that have not been played yet.
-    virtual std::size_t SamplesInQueue() const = 0;
+    virtual void SetCallback(std::function<void(s16* buffer, size_t num_frames)> cb) = 0;
 };
 
 } // namespace AudioCore

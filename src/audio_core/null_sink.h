@@ -19,11 +19,7 @@ public:
         return native_sample_rate;
     }
 
-    void EnqueueSamples(const s16*, size_t) override {}
-
-    size_t SamplesInQueue() const override {
-        return 0;
-    }
+    void SetCallback(std::function<void(s16* buffer, size_t num_frames)>) override {}
 };
 
 } // namespace AudioCore

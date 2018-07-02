@@ -17,9 +17,9 @@ struct SDL2Sink::Impl {
 
     SDL_AudioDeviceID audio_device_id = 0;
 
-    std::list<std::vector<s16>> queue;
+    std::function<void(s16* buffer, size_t num_frames)> cb;
 
-    static void Callback(void* impl_, u8* buffer, int buffer_size_in_bytes);
+    static void Callback(void* impl_, u8* buffer, int byte_size);
 };
 
 SDL2Sink::SDL2Sink(std::string device_name) : impl(std::make_unique<Impl>()) {
@@ -74,56 +74,18 @@ unsigned int SDL2Sink::GetNativeSampleRate() const {
     return impl->sample_rate;
 }
 
-void SDL2Sink::EnqueueSamples(const s16* samples, size_t sample_count) {
-    if (impl->audio_device_id <= 0)
-        return;
-
-    SDL_LockAudioDevice(impl->audio_device_id);
-    impl->queue.emplace_back(samples, samples + sample_count * 2);
-    SDL_UnlockAudioDevice(impl->audio_device_id);
+void SDL2Sink::SetCallback(std::function<void(s16* buffer, size_t num_frames)> cb) {
+    impl->cb = cb;
 }
 
-size_t SDL2Sink::SamplesInQueue() const {
-    if (impl->audio_device_id <= 0)
-        return 0;
-
-    SDL_LockAudioDevice(impl->audio_device_id);
-
-    size_t total_size = std::accumulate(impl->queue.begin(), impl->queue.end(),
-                                        static_cast<size_t>(0), [](size_t sum, const auto& buffer) {
-                                            // Division by two because each stereo sample is made of
-                                            // two s16.
-                                            return sum + buffer.size() / 2;
-                                        });
-
-    SDL_UnlockAudioDevice(impl->audio_device_id);
-
-    return total_size;
-}
-
-void SDL2Sink::Impl::Callback(void* impl_, u8* buffer, int buffer_size_in_bytes) {
+void SDL2Sink::Impl::Callback(void* impl_, u8* buffer_, int byte_size) {
     Impl* impl = reinterpret_cast<Impl*>(impl_);
+    s16* buffer = reinterpret_cast<s16*>(buffer_);
 
-    size_t remaining_size = static_cast<size_t>(buffer_size_in_bytes) /
-                            sizeof(s16); // Keep track of size in 16-bit increments.
+    size_t frame_count = static_cast<size_t>(byte_size) / (sizeof(s16) * 2);
 
-    while (remaining_size > 0 && !impl->queue.empty()) {
-        if (impl->queue.front().size() <= remaining_size) {
-            memcpy(buffer, impl->queue.front().data(), impl->queue.front().size() * sizeof(s16));
-            buffer += impl->queue.front().size() * sizeof(s16);
-            remaining_size -= impl->queue.front().size();
-            impl->queue.pop_front();
-        } else {
-            memcpy(buffer, impl->queue.front().data(), remaining_size * sizeof(s16));
-            buffer += remaining_size * sizeof(s16);
-            impl->queue.front().erase(impl->queue.front().begin(),
-                                      impl->queue.front().begin() + remaining_size);
-            remaining_size = 0;
-        }
-    }
-
-    if (remaining_size > 0) {
-        memset(buffer, 0, remaining_size * sizeof(s16));
+    if (impl->cb) {
+        impl->cb(buffer, frame_count);
     }
 }
 

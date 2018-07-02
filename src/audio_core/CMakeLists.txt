@@ -17,6 +17,8 @@ add_library(audio_core STATIC
     interpolate.cpp
     interpolate.h
     null_sink.h
+    resampler.cpp
+    resampler.h
     sink.h
     sink_details.cpp
     sink_details.h

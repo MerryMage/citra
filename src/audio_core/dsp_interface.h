@@ -8,6 +8,7 @@
 #include <vector>
 #include "audio_core/audio_types.h"
 #include "audio_core/time_stretch.h"
+#include "audio_core/resampler.h"
 #include "common/common_types.h"
 #include "core/memory.h"
 
@@ -74,8 +75,7 @@ private:
     void FlushResidualStretcherAudio();
 
     std::unique_ptr<Sink> sink;
-    bool perform_time_stretching = false;
-    TimeStretcher time_stretcher;
+    Resampler resampler;
 };
 
 } // namespace AudioCore
