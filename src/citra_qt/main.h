@@ -5,6 +5,7 @@
 #pragma once
 
 #include <memory>
+#include <QFileSystemWatcher>
 #include <QLabel>
 #include <QMainWindow>
 #include <QTimer>
@@ -204,6 +205,8 @@ private:
     std::unique_ptr<EmuThread> emu_thread;
     // The title of the game currently running
     QString game_title;
+
+    std::shared_ptr<QFileSystemWatcher> file_watcher;
 
     // Debugger panes
     ProfilerWidget* profilerWidget;

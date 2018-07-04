@@ -712,6 +712,13 @@ void GMainWindow::BootGame(const QString& filename) {
         ShowFullscreen();
     }
     OnStartGame();
+
+    file_watcher = std::make_shared<QFileSystemWatcher>();
+    file_watcher->addPath(filename);
+    connect(file_watcher.get(), &QFileSystemWatcher::fileChanged, [this](const QString& filename){
+        this->ShutdownGame();
+        this->BootGame(filename);
+    });
 }
 
 void GMainWindow::ShutdownGame() {
