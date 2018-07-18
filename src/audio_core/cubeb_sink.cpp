@@ -44,21 +44,21 @@ CubebSink::CubebSink(std::string target_device_name) : impl(std::make_unique<Imp
     if (cubeb_get_min_latency(impl->ctx, &params, &minimum_latency) != CUBEB_OK)
         LOG_CRITICAL(Audio_Sink, "Error getting minimum latency");
 
-    if (target_device_name != auto_device_name && !target_device_name.empty()) {
-        cubeb_device_collection collection;
-        if (cubeb_enumerate_devices(impl->ctx, CUBEB_DEVICE_TYPE_OUTPUT, &collection) != CUBEB_OK) {
-            LOG_WARNING(Audio_Sink, "Audio output device enumeration not supported");
-        } else {
-            const auto collection_end = collection.device + collection.count;
-            const auto device = std::find_if(collection.device, collection_end,
-                                             [&](const cubeb_device_info& device) {
-                                                 return target_device_name == device.friendly_name;
-                                             });
-            if (device != collection_end) {
-                output_device = device->devid;
-            }
-            cubeb_device_collection_destroy(impl->ctx, &collection);
+    const bool is_auto = target_device_name == auto_device_name || target_device_name.empty();
+
+    cubeb_device_collection collection;
+    if (cubeb_enumerate_devices(impl->ctx, CUBEB_DEVICE_TYPE_OUTPUT, &collection) != CUBEB_OK) {
+        LOG_WARNING(Audio_Sink, "Audio output device enumeration not supported");
+    } else {
+        const auto collection_end = collection.device + collection.count;
+        const auto device = std::find_if(collection.device, collection_end,
+                                         [&](const cubeb_device_info& device) {
+                                             return target_device_name == device.friendly_name;
+                                         });
+        if (device != collection_end && !is_auto) {
+            output_device = device->devid;
         }
+        cubeb_device_collection_destroy(impl->ctx, &collection);
     }
 
     if (cubeb_stream_init(impl->ctx, &impl->stream, "Citra Audio Output", nullptr, nullptr,
