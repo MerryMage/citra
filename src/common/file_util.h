@@ -153,7 +153,7 @@ void SplitFilename83(const std::string& filename, std::array<char, 9>& short_nam
 // simple wrapper for cstdlib file functions to
 // hopefully will make error checking easier
 // and make forgetting an fclose() harder
-class IOFile : public NonCopyable {
+class IOFile {
 public:
     IOFile();
 
@@ -163,6 +163,9 @@ public:
     IOFile(const std::string& filename, const char openmode[], int flags = 0);
 
     ~IOFile();
+
+    IOFile(const IOFile& other) = delete;
+    IOFile& operator=(const IOFile& other) = delete;
 
     IOFile(IOFile&& other);
     IOFile& operator=(IOFile&& other);
