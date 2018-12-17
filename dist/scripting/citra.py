@@ -1,6 +1,7 @@
 import zmq
 import struct
 import random
+import binascii
 import enum
 
 CURRENT_REQUEST_VERSION = 1
