@@ -24,10 +24,6 @@ namespace AudioCore {
 class DspInterface;
 }
 
-namespace RPC {
-class RPCServer;
-}
-
 namespace Service {
 namespace SM {
 class ServiceManager;
@@ -264,9 +260,6 @@ private:
 
     /// Cheats manager
     std::unique_ptr<Cheats::CheatEngine> cheat_engine;
-
-    /// RPC Server for scripting support
-    std::unique_ptr<RPC::RPCServer> rpc_server;
 
     std::unique_ptr<Service::FS::ArchiveManager> archive_manager;
 

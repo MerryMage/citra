@@ -211,8 +211,7 @@ void DebuggerBackend::Write(const Entry& entry) {
     CLS(Network)                                                                                   \
     CLS(Movie)                                                                                     \
     CLS(Loader)                                                                                    \
-    CLS(WebService)                                                                                \
-    CLS(RPC_Server)
+    CLS(WebService)
 
 // GetClassName is a macro defined by Windows.h, grrr...
 const char* GetLogClassName(Class log_class) {
