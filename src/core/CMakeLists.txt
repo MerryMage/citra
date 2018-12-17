@@ -424,6 +424,14 @@ add_library(core STATIC
     movie.h
     perf_stats.cpp
     perf_stats.h
+    rpc/packet.cpp
+    rpc/packet.h
+    rpc/rpc_server.cpp
+    rpc/rpc_server.h
+    rpc/server.cpp
+    rpc/server.h
+    rpc/zmq_server.cpp
+    rpc/zmq_server.h
     settings.cpp
     settings.h
     telemetry_session.cpp
@@ -432,18 +440,6 @@ add_library(core STATIC
     tracer/recorder.cpp
     tracer/recorder.h
 )
-if (ENABLE_SCRIPTING)
-    target_sources(core PRIVATE
-        rpc/packet.cpp
-        rpc/packet.h
-        rpc/rpc_server.cpp
-        rpc/rpc_server.h
-        rpc/server.cpp
-        rpc/server.h
-        rpc/zmq_server.cpp
-        rpc/zmq_server.h
-    )
-endif()
 
 create_target_directory_groups(core)
 
@@ -464,6 +460,4 @@ if (ARCHITECTURE_x86_64)
     target_link_libraries(core PRIVATE dynarmic)
 endif()
 
-if (ENABLE_SCRIPTING)
-    target_link_libraries(core PUBLIC libzmq-headers cppzmq-headers libzmq)
-endif()
+target_link_libraries(core PUBLIC libzmq-headers cppzmq-headers libzmq)
