@@ -93,6 +93,7 @@ void FastmemMapper::Map(u8* base, VAddr vaddr, u8* backing_memory, std::size_t s
                                         });
 
     if (allocation == impl->allocations.end()) {
+        Unmap(base, vaddr, size);
         return;
     }
 
