@@ -51,6 +51,7 @@ void VMManager::Reset() {
 
     page_table.pointers.fill(nullptr);
     page_table.attributes.fill(Memory::PageType::Unmapped);
+    memory.PrepareFastmem(page_table);
 
     UpdatePageTableForVMA(initial_vma);
 }

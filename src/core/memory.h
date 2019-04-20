@@ -63,6 +63,8 @@ struct PageTable {
      * the corresponding entry in `pointers` MUST be set to null.
      */
     std::array<PageType, PAGE_TABLE_NUM_ENTRIES> attributes;
+
+    u8* fastmem_base = nullptr;
 };
 
 /// Physical memory regions as seen from the ARM11
@@ -205,6 +207,7 @@ public:
     MemorySystem();
     ~MemorySystem();
 
+    void PrepareFastmem(PageTable& page_table);
     /**
      * Maps an allocated buffer onto a region of the emulated process address space.
      *
