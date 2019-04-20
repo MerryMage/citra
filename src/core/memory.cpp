@@ -75,7 +75,9 @@ public:
 MemorySystem::MemorySystem() : impl(std::make_unique<Impl>()) {}
 MemorySystem::~MemorySystem() = default;
 
-void MemorySystem::PrepareFastmem(PageTable& page_table) {
+void MemorySystem::ResetPageTable(PageTable& page_table) {
+    page_table.pointers.fill(nullptr);
+    page_table.attributes.fill(Memory::PageType::Unmapped);
     page_table.fastmem_base = impl->fastmem_mapper.AllocRegion();
 }
 

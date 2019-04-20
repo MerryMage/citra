@@ -12,16 +12,23 @@
 #include "common/common_types.h"
 
 class ARM_Interface;
-
-namespace Kernel {
-class Process;
-}
+class ARM_Dynarmic;
 
 namespace AudioCore {
 class DspInterface;
 }
 
+namespace Common {
+class FastmemMapper;
+};
+
+namespace Kernel {
+class Process;
+}
+
 namespace Memory {
+
+class MemorySystem;
 
 // Are defined in a system header
 #undef PAGE_SIZE
@@ -51,7 +58,12 @@ enum class PageType {
  * fetching requirements when accessing. In the usual case of an access to regular memory, it only
  * requires an indexed fetch and a check for NULL.
  */
-struct PageTable {
+class PageTable final {
+private:
+    friend class ::ARM_Dynarmic;
+    friend class ::Common::FastmemMapper;
+    friend class ::Memory::MemorySystem;
+
     /**
      * Array of memory pointers backing each page. An entry can only be non-null if the
      * corresponding entry in the `attributes` array is of type `Memory`.
@@ -64,6 +76,11 @@ struct PageTable {
      */
     std::array<PageType, PAGE_TABLE_NUM_ENTRIES> attributes;
 
+    /**
+     * Contains fastmem information. This includes a pointer to beginning of 4 GiB memory region
+     * which represents emulated memory. A region is guaranteed to segfault on access if the
+     * corresponding entry in the `pointers` array is nullptr.
+     */
     u8* fastmem_base = nullptr;
 };
 
@@ -207,7 +224,14 @@ public:
     MemorySystem();
     ~MemorySystem();
 
-    void PrepareFastmem(PageTable& page_table);
+    /**
+     * Resets page table by clearning all mappings.
+     * Also enables fastmem support for specified page table.
+     *
+     * @param page_table The page table to reset.
+     */
+    void ResetPageTable(PageTable& page_table);
+
     /**
      * Maps an allocated buffer onto a region of the emulated process address space.
      *
