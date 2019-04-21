@@ -339,7 +339,8 @@ void FastmemMapper::Map(Memory::PageTable& page_table, VAddr vaddr, u8* backing_
         return;
     }
 
-    mmap(page_table.fastmem_base + vaddr, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, impl->fd, offset);
+    void* success = mmap(page_table.fastmem_base + vaddr, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, impl->fd, offset);
+    DEBUG_ASSERT(result != MAP_FAILED);
 }
 
 void FastmemMapper::Unmap(Memory::PageTable& page_table, VAddr vaddr, std::size_t size) {
@@ -347,7 +348,8 @@ void FastmemMapper::Unmap(Memory::PageTable& page_table, VAddr vaddr, std::size_
         return;
     }
 
-    mmap(page_table.fastmem_base + vaddr, size, PROT_NONE, MAP_FIXED, -1, 0);
+    void* result = mmap(page_table.fastmem_base + vaddr, size, PROT_NONE, MAP_ANON | MAP_PRIVATE | MAP_FIXED, -1, 0);
+    DEBUG_ASSERT(result != MAP_FAILED);
 }
 
 } // namespace Common
