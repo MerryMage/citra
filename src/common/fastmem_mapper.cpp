@@ -123,7 +123,6 @@ u8* FastmemMapper::Allocate(std::size_t size) {
 }
 
 u8* FastmemMapper::AllocRegion() {
-    return (u8*)0xFFFFDEAD00000000;
     if (!fastmem_enabled) {
         ASSERT_MSG(false, "Fastmem not enabled (Unsupported version of Windows)");
         return nullptr;
@@ -190,7 +189,7 @@ void FastmemMapper::Impl::DoUnmap(Memory::PageTable& page_table, VAddr vaddr) {
 }
 
 void FastmemMapper::Map(Memory::PageTable& page_table, VAddr vaddr, u8* backing_memory, std::size_t size) {
-    if (true) {//!page_table.fastmem_base) {
+    if (!page_table.fastmem_base) {
         return;
     }
 
@@ -221,7 +220,7 @@ void FastmemMapper::Map(Memory::PageTable& page_table, VAddr vaddr, u8* backing_
 }
 
 void FastmemMapper::Unmap(Memory::PageTable& page_table, VAddr vaddr, std::size_t size) {
-    if (true) {//!page_table.fastmem_base) {
+    if (!page_table.fastmem_base) {
         return;
     }
 
