@@ -96,13 +96,6 @@ void MemorySystem::MapPages(PageTable& page_table, u32 base, u32 size, u8* memor
     RasterizerFlushVirtualRegion(base << PAGE_BITS, size * PAGE_SIZE,
                                  FlushMode::FlushAndInvalidate);
 
-    if (memory) {
-        impl->fastmem_mapper.Map(page_table.fastmem_base, base * PAGE_SIZE, memory,
-                                 size * PAGE_SIZE);
-    } else {
-        impl->fastmem_mapper.Unmap(page_table.fastmem_base, base * PAGE_SIZE, size * PAGE_SIZE);
-    }
-
     u32 end = base + size;
     while (base != end) {
         ASSERT_MSG(base < PAGE_TABLE_NUM_ENTRIES, "out of range mapping at {:08X}", base);
@@ -114,7 +107,11 @@ void MemorySystem::MapPages(PageTable& page_table, u32 base, u32 size, u8* memor
         if (type == PageType::Memory && impl->cache_marker.IsCached(base * PAGE_SIZE)) {
             page_table.attributes[base] = PageType::RasterizerCachedMemory;
             page_table.pointers[base] = nullptr;
-            impl->fastmem_mapper.Unmap(page_table.fastmem_base, base * PAGE_SIZE, PAGE_SIZE);
+            impl->fastmem_mapper.Unmap(page_table, base * PAGE_SIZE, PAGE_SIZE);
+        } else if (memory) {
+            impl->fastmem_mapper.Map(page_table, base * PAGE_SIZE, memory, PAGE_SIZE);
+        } else {
+            impl->fastmem_mapper.Unmap(page_table, base * PAGE_SIZE, PAGE_SIZE);
         }
 
         base += 1;
@@ -350,9 +347,9 @@ void MemorySystem::RasterizerMarkRegionCached(PAddr start, u32 size, bool cached
                         // address space, for example, a system module need not have a VRAM mapping.
                         break;
                     case PageType::Memory:
-                        impl->fastmem_mapper.Unmap(page_table->fastmem_base, vaddr, PAGE_SIZE);
                         page_type = PageType::RasterizerCachedMemory;
                         page_table->pointers[vaddr >> PAGE_BITS] = nullptr;
+                        impl->fastmem_mapper.Unmap(*page_table, vaddr, PAGE_SIZE);
                         break;
                     default:
                         UNREACHABLE();
@@ -366,9 +363,9 @@ void MemorySystem::RasterizerMarkRegionCached(PAddr start, u32 size, bool cached
                         break;
                     case PageType::RasterizerCachedMemory: {
                         u8* ptr = GetPointerForRasterizerCache(vaddr & ~PAGE_MASK);
-                        impl->fastmem_mapper.Map(page_table->fastmem_base, vaddr, ptr, PAGE_SIZE);
                         page_type = PageType::Memory;
                         page_table->pointers[vaddr >> PAGE_BITS] = ptr;
+                        impl->fastmem_mapper.Map(*page_table, vaddr, ptr, PAGE_SIZE);
                         break;
                     }
                     default:

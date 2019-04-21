@@ -7,6 +7,10 @@
 
 #include "common/common_types.h"
 
+namespace Memory {
+class PageTable;
+}
+
 namespace Common {
 
 class FastmemMapper final {
@@ -18,10 +22,9 @@ public:
     void* GetBaseAddress() const;
     u8* Allocate(std::size_t size);
 
-    // TODO: Wrap these in a subclass
     u8* AllocRegion();
-    void Map(u8* base, VAddr vaddr, u8* backing_memory, std::size_t size);
-    void Unmap(u8* base, VAddr vaddr, std::size_t size);
+    void Map(Memory::PageTable& page_table, VAddr vaddr, u8* backing_memory, std::size_t size);
+    void Unmap(Memory::PageTable& page_table, VAddr vaddr, std::size_t size);
 
 private:
     struct Impl;
