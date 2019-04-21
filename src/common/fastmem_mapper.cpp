@@ -251,6 +251,7 @@ void FastmemMapper::Unmap(Memory::PageTable& page_table, VAddr vaddr, std::size_
 #include "common/assert.h"
 #include "common/common_types.h"
 #include "common/fastmem_mapper.h"
+#include "core/memory.h"
 
 namespace Common {
 
@@ -315,8 +316,8 @@ u8* FastmemMapper::AllocRegion() {
     return static_cast<u8*>(base);
 }
 
-void FastmemMapper::Map(u8* base, VAddr vaddr, u8* backing_memory, std::size_t size) {
-    if (!base) {
+void FastmemMapper::Map(Memory::PageTable& page_table, VAddr vaddr, u8* backing_memory, std::size_t size) {
+    if (!page_table.fastmem_base) {
         return;
     }
 
@@ -327,7 +328,7 @@ void FastmemMapper::Map(u8* base, VAddr vaddr, u8* backing_memory, std::size_t s
                                         });
 
     if (allocation == impl->allocations.end()) {
-        Unmap(base, vaddr, size);
+        Unmap(page_table, vaddr, size);
         return;
     }
 
@@ -338,15 +339,15 @@ void FastmemMapper::Map(u8* base, VAddr vaddr, u8* backing_memory, std::size_t s
         return;
     }
 
-    mmap(base + vaddr, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, impl->fd, offset);
+    mmap(page_table.fastmem_base + vaddr, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, impl->fd, offset);
 }
 
-void FastmemMapper::Unmap(u8* base, VAddr vaddr, std::size_t size) {
-    if (!base) {
+void FastmemMapper::Unmap(Memory::PageTable& page_table, VAddr vaddr, std::size_t size) {
+    if (!page_table.fastmem_base) {
         return;
     }
 
-    mmap(base + vaddr, size, PROT_NONE, MAP_FIXED, -1, 0);
+    mmap(page_table.fastmem_base + vaddr, size, PROT_NONE, MAP_FIXED, -1, 0);
 }
 
 } // namespace Common
@@ -372,9 +373,9 @@ u8* FastmemMapper::AllocRegion() {
     return nullptr;
 }
 
-void FastmemMapper::Map(u8* base, VAddr vaddr, u8* backing_memory, std::size_t size) {}
+void FastmemMapper::Map(Memory::PageTable&, VAddr vaddr, u8* backing_memory, std::size_t size) {}
 
-void FastmemMapper::Unmap(u8* base, VAddr vaddr, std::size_t size) {}
+void FastmemMapper::Unmap(Memory::PageTable&, VAddr vaddr, std::size_t size) {}
 
 } // namespace Common
 
