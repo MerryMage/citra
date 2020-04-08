@@ -66,6 +66,9 @@ public:
     void Unmap(Memory::PageTable& page_table, VAddr vaddr, std::size_t size);
 
 private:
+    friend class BackingMemory;
+    friend class FastmemRegion;
+
     struct Impl;
     std::unique_ptr<Impl> impl;
 };
