@@ -472,14 +472,14 @@ void MemorySystem::ReadBlock(const Kernel::Process& process, const VAddr src_add
     auto& page_table = process.vm_manager.page_table;
 
     std::size_t remaining_size = size;
-    std::size_t page_index = src_addr >> PAGE_BITS;
+    std::size_t page_base = src_addr & ~PAGE_MASK;
     std::size_t page_offset = src_addr & PAGE_MASK;
 
     while (remaining_size > 0) {
         const std::size_t copy_amount = std::min(PAGE_SIZE - page_offset, remaining_size);
-        const VAddr current_vaddr = static_cast<VAddr>((page_index << PAGE_BITS) + page_offset);
+        const VAddr current_vaddr = static_cast<VAddr>(page_base + page_offset);
 
-        switch (page_table.attributes[page_index]) {
+        switch (page_table.attributes[page_base >> PAGE_BITS]) {
         case PageType::Unmapped: {
             LOG_ERROR(HW_Memory,
                       "unmapped ReadBlock @ 0x{:08X} (start address = 0x{:08X}, size = {})",
@@ -503,7 +503,7 @@ void MemorySystem::ReadBlock(const Kernel::Process& process, const VAddr src_add
             UNREACHABLE();
         }
 
-        page_index++;
+        page_base += PAGE_SIZE;
         page_offset = 0;
         dest_buffer = static_cast<u8*>(dest_buffer) + copy_amount;
         remaining_size -= copy_amount;
@@ -530,14 +530,14 @@ void MemorySystem::WriteBlock(const Kernel::Process& process, const VAddr dest_a
                               const void* src_buffer, const std::size_t size) {
     auto& page_table = process.vm_manager.page_table;
     std::size_t remaining_size = size;
-    std::size_t page_index = dest_addr >> PAGE_BITS;
+    std::size_t page_base = dest_addr & ~PAGE_MASK;
     std::size_t page_offset = dest_addr & PAGE_MASK;
 
     while (remaining_size > 0) {
         const std::size_t copy_amount = std::min(PAGE_SIZE - page_offset, remaining_size);
-        const VAddr current_vaddr = static_cast<VAddr>((page_index << PAGE_BITS) + page_offset);
+        const VAddr current_vaddr = static_cast<VAddr>(page_base + page_offset);
 
-        switch (page_table.attributes[page_index]) {
+        switch (page_table.attributes[page_base >> PAGE_BITS]) {
         case PageType::Unmapped: {
             LOG_ERROR(HW_Memory,
                       "unmapped WriteBlock @ 0x{:08X} (start address = 0x{:08X}, size = {})",
@@ -560,7 +560,7 @@ void MemorySystem::WriteBlock(const Kernel::Process& process, const VAddr dest_a
             UNREACHABLE();
         }
 
-        page_index++;
+        page_base += PAGE_SIZE;
         page_offset = 0;
         src_buffer = static_cast<const u8*>(src_buffer) + copy_amount;
         remaining_size -= copy_amount;
@@ -571,16 +571,14 @@ void MemorySystem::ZeroBlock(const Kernel::Process& process, const VAddr dest_ad
                              const std::size_t size) {
     auto& page_table = process.vm_manager.page_table;
     std::size_t remaining_size = size;
-    std::size_t page_index = dest_addr >> PAGE_BITS;
+    std::size_t page_base = dest_addr & ~PAGE_MASK;
     std::size_t page_offset = dest_addr & PAGE_MASK;
-
-    static const std::array<u8, PAGE_SIZE> zeros = {};
 
     while (remaining_size > 0) {
         const std::size_t copy_amount = std::min(PAGE_SIZE - page_offset, remaining_size);
-        const VAddr current_vaddr = static_cast<VAddr>((page_index << PAGE_BITS) + page_offset);
+        const VAddr current_vaddr = static_cast<VAddr>(page_base + page_offset);
 
-        switch (page_table.attributes[page_index]) {
+        switch (page_table.attributes[page_base >> PAGE_BITS]) {
         case PageType::Unmapped: {
             LOG_ERROR(HW_Memory,
                       "unmapped ZeroBlock @ 0x{:08X} (start address = 0x{:08X}, size = {})",
@@ -603,7 +601,7 @@ void MemorySystem::ZeroBlock(const Kernel::Process& process, const VAddr dest_ad
             UNREACHABLE();
         }
 
-        page_index++;
+        page_base += PAGE_SIZE;
         page_offset = 0;
         remaining_size -= copy_amount;
     }
@@ -619,14 +617,14 @@ void MemorySystem::CopyBlock(const Kernel::Process& dest_process,
                              std::size_t size) {
     auto& page_table = src_process.vm_manager.page_table;
     std::size_t remaining_size = size;
-    std::size_t page_index = src_addr >> PAGE_BITS;
+    std::size_t page_base = src_addr & ~PAGE_MASK;
     std::size_t page_offset = src_addr & PAGE_MASK;
 
     while (remaining_size > 0) {
         const std::size_t copy_amount = std::min(PAGE_SIZE - page_offset, remaining_size);
-        const VAddr current_vaddr = static_cast<VAddr>((page_index << PAGE_BITS) + page_offset);
+        const VAddr current_vaddr = static_cast<VAddr>(page_base + page_offset);
 
-        switch (page_table.attributes[page_index]) {
+        switch (page_table.attributes[page_base >> PAGE_BITS]) {
         case PageType::Unmapped: {
             LOG_ERROR(HW_Memory,
                       "unmapped CopyBlock @ 0x{:08X} (start address = 0x{:08X}, size = {})",
@@ -651,7 +649,7 @@ void MemorySystem::CopyBlock(const Kernel::Process& dest_process,
             UNREACHABLE();
         }
 
-        page_index++;
+        page_base += PAGE_SIZE;
         page_offset = 0;
         dest_addr += static_cast<VAddr>(copy_amount);
         src_addr += static_cast<VAddr>(copy_amount);
