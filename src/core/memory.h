@@ -73,7 +73,25 @@ private:
      */
     std::array<PageType, PAGE_TABLE_NUM_ENTRIES> attributes;
 
+    /**
+     * Base address of a 4GiB region in the host address space that corresponds 1:1 to the
+     * entire guest address space. There may be holes in this address space in order to
+     * intentionally trigger segfaults for memory managed by the rasterizer cache.
+     */
     Common::FastmemRegion fastmem_base;
+
+    /// Get backing memory for a virtual address. May be nullptr.
+    u8* Get(VAddr vaddr) const;
+
+    void Set(PageType page_type, VAddr vaddr, u8* backing_memory);
+
+    void SetMemory(VAddr vaddr, u8* backing_memory) {
+        Set(PageType::Memory, vaddr, backing_memory);
+    }
+
+    void SetRasterizerCachedMemory(VAddr vaddr) {
+        Set(PageType::RasterizerCachedMemory, vaddr, nullptr);
+    }
 };
 
 /// Physical memory regions as seen from the ARM11

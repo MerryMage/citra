@@ -317,5 +317,6 @@ std::unique_ptr<Dynarmic::A32::Jit> ARM_Dynarmic::MakeJit() {
     }
     config.coprocessors[15] = std::make_shared<DynarmicCP15>(cp15_state);
     config.define_unpredictable_behaviour = true;
+    config.absolute_offset_page_table = true;
     return std::make_unique<Dynarmic::A32::Jit>(config);
 }
