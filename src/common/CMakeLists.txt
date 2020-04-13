@@ -109,7 +109,7 @@ add_library(common STATIC
     zstd_compression.h
 )
 
-if(UNIX)
+if(UNIX AND NOT ANDROID)
     target_sources(common PRIVATE fastmem_mapper_posix.cpp)
 else()
     target_sources(common PRIVATE fastmem_mapper_generic.cpp)
@@ -119,7 +119,6 @@ if(ARCHITECTURE_x86_64)
     target_sources(common
         PRIVATE
             x64/cpu_detect.cpp
-
             x64/cpu_detect.h
             x64/xbyak_abi.h
             x64/xbyak_util.h
