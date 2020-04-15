@@ -45,7 +45,8 @@ struct FastmemMapper::Impl {
     }
 };
 
-BackingMemory::BackingMemory(FastmemMapper* m, u8* p) : mapper(m), pointer(p) {}
+BackingMemory::BackingMemory(FastmemMapper* mapper, u8* pointer)
+    : mapper(mapper), pointer(pointer) {}
 
 BackingMemory::~BackingMemory() {
     const auto allocation = mapper->impl->FindAllocation(pointer);
@@ -56,10 +57,11 @@ BackingMemory::~BackingMemory() {
     mapper->impl->allocations.erase(allocation);
 }
 
-FastmemRegion::FastmemRegion() : mapper(nullptr), pointer(nullptr) {}
-FastmemRegion::FastmemRegion(FastmemMapper* m, u8* p) : mapper(m), pointer(p) {}
+FastmemRegion::FastmemRegion() = default;
+FastmemRegion::FastmemRegion(FastmemMapper* mapper, u8* pointer)
+    : mapper(mapper), pointer(pointer) {}
 
-FastmemRegion::~FastmemRegion() {}
+FastmemRegion::~FastmemRegion() = default;
 
 FastmemMapper::FastmemMapper(std::size_t shmem_required) : impl(std::make_unique<Impl>()) {
     impl->max_alloc = shmem_required;

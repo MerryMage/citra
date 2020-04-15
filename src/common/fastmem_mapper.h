@@ -28,7 +28,7 @@ public:
 private:
     friend class FastmemMapper;
 
-    BackingMemory(FastmemMapper* m, u8* p);
+    BackingMemory(FastmemMapper* mapper, u8* pointer);
 
     FastmemMapper* mapper;
     u8* pointer;
@@ -46,10 +46,10 @@ public:
 private:
     friend class FastmemMapper;
 
-    FastmemRegion(FastmemMapper* m, u8* p);
+    FastmemRegion(FastmemMapper* mapper, u8* pointer);
 
-    FastmemMapper* mapper;
-    u8* pointer;
+    FastmemMapper* mapper = nullptr;
+    u8* pointer = nullptr;
 };
 
 class FastmemMapper final {

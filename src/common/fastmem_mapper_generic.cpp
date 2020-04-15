@@ -7,22 +7,24 @@
 
 namespace Common {
 
-BackingMemory::BackingMemory(FastmemMapper* m, u8* p) : mapper(m), pointer(p) {}
+BackingMemory::BackingMemory(FastmemMapper* mapper, u8* pointer)
+    : mapper(mapper), pointer(pointer) {}
 
 BackingMemory::~BackingMemory() {
     std::free(static_cast<void*>(pointer));
 }
 
-FastmemRegion::FastmemRegion() : mapper(nullptr), pointer(nullptr) {}
-FastmemRegion::FastmemRegion(FastmemMapper* m, u8* p) : mapper(m), pointer(p) {}
+FastmemRegion::FastmemRegion() = default;
+FastmemRegion::FastmemRegion(FastmemMapper* mapper, u8* pointer)
+    : mapper(mapper), pointer(pointer) {}
 
-FastmemRegion::~FastmemRegion() {}
+FastmemRegion::~FastmemRegion() = default;
 
 struct FastmemMapper::Impl {};
 
 FastmemMapper::FastmemMapper(std::size_t shmem_required) : impl(std::make_unique<Impl>()) {}
 
-FastmemMapper::~FastmemMapper() {}
+FastmemMapper::~FastmemMapper() = default;
 
 BackingMemory FastmemMapper::Allocate(std::size_t size) {
     return BackingMemory(this, static_cast<u8*>(std::malloc(size)));
