@@ -323,6 +323,12 @@ PerfStats::Results System::GetAndResetPerfStats() {
                                   : PerfStats::Results{};
 }
 
+void System::InvalidateCacheRange(u32 start_address, std::size_t length) {
+    for (const auto& cpu : cpu_cores) {
+        cpu->InvalidateCacheRange(start_address, length);
+    }
+}
+
 void System::Reschedule() {
     if (!reschedule_pending) {
         return;
@@ -376,8 +382,6 @@ System::ResultStatus System::Init(Frontend::EmuWindow& emu_window, u32 system_mo
     } else {
         dsp_core = std::make_unique<AudioCore::DspHle>(*memory);
     }
-
-    memory->SetDSP(*dsp_core);
 
     dsp_core->SetSink(Settings::values.sink_id, Settings::values.audio_device_id);
     dsp_core->EnableStretching(Settings::values.enable_audio_stretching);
@@ -573,6 +577,8 @@ void System::serialize(Archive& ar, const unsigned int file_version) {
     // flush on save, don't flush on load
     bool should_flush = !Archive::is_loading::value;
     Memory::RasterizerClearAll(should_flush);
+    ar&* memory.get();
+
     ar&* timing.get();
     for (u32 i = 0; i < num_cores; i++) {
         ar&* cpu_cores[i].get();
@@ -591,7 +597,6 @@ void System::serialize(Archive& ar, const unsigned int file_version) {
         throw std::runtime_error("LLE audio not supported for save states");
     }
 
-    ar&* memory.get();
     ar&* kernel.get();
     VideoCore::serialize(ar, file_version);
     if (file_version >= 1) {
@@ -601,7 +606,6 @@ void System::serialize(Archive& ar, const unsigned int file_version) {
     // This needs to be set from somewhere - might as well be here!
     if (Archive::is_loading::value) {
         Service::GSP::SetGlobalModule(*this);
-        memory->SetDSP(*dsp_core);
         cheat_engine->Connect();
         VideoCore::g_renderer->Sync();
     }

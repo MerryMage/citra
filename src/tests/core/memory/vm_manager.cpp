@@ -10,13 +10,13 @@
 #include "core/memory.h"
 
 TEST_CASE("Memory Basics", "[kernel][memory]") {
-    auto mem = std::make_shared<BufferMem>(Memory::PAGE_SIZE);
-    MemoryRef block{mem};
     Memory::MemorySystem memory;
+    auto block = memory.GetBackingMemoryManager().AllocateBackingMemory(Memory::PAGE_SIZE);
+
     SECTION("mapping memory") {
         // Because of the PageTable, Kernel::VMManager is too big to be created on the stack.
         auto manager = std::make_unique<Kernel::VMManager>(memory);
-        auto result = manager->MapBackingMemory(Memory::HEAP_VADDR, block, block.GetSize(),
+        auto result = manager->MapBackingMemory(Memory::HEAP_VADDR, block.GetRef(), block.GetSize(),
                                                 Kernel::MemoryState::Private);
         REQUIRE(result.Code() == RESULT_SUCCESS);
 
@@ -24,14 +24,14 @@ TEST_CASE("Memory Basics", "[kernel][memory]") {
         CHECK(vma != manager->vma_map.end());
         CHECK(vma->second.size == block.GetSize());
         CHECK(vma->second.type == Kernel::VMAType::BackingMemory);
-        CHECK(vma->second.backing_memory.GetPtr() == block.GetPtr());
+        CHECK(vma->second.backing_memory == block.GetRef());
         CHECK(vma->second.meminfo_state == Kernel::MemoryState::Private);
     }
 
     SECTION("unmapping memory") {
         // Because of the PageTable, Kernel::VMManager is too big to be created on the stack.
         auto manager = std::make_unique<Kernel::VMManager>(memory);
-        auto result = manager->MapBackingMemory(Memory::HEAP_VADDR, block, block.GetSize(),
+        auto result = manager->MapBackingMemory(Memory::HEAP_VADDR, block.GetRef(), block.GetSize(),
                                                 Kernel::MemoryState::Private);
         REQUIRE(result.Code() == RESULT_SUCCESS);
 
@@ -41,13 +41,13 @@ TEST_CASE("Memory Basics", "[kernel][memory]") {
         auto vma = manager->FindVMA(Memory::HEAP_VADDR);
         CHECK(vma != manager->vma_map.end());
         CHECK(vma->second.type == Kernel::VMAType::Free);
-        CHECK(vma->second.backing_memory.GetPtr() == nullptr);
+        CHECK(vma->second.backing_memory == Memory::INVALID_MEMORY_REF);
     }
 
     SECTION("changing memory permissions") {
         // Because of the PageTable, Kernel::VMManager is too big to be created on the stack.
         auto manager = std::make_unique<Kernel::VMManager>(memory);
-        auto result = manager->MapBackingMemory(Memory::HEAP_VADDR, block, block.GetSize(),
+        auto result = manager->MapBackingMemory(Memory::HEAP_VADDR, block.GetRef(), block.GetSize(),
                                                 Kernel::MemoryState::Private);
         REQUIRE(result.Code() == RESULT_SUCCESS);
 
@@ -66,7 +66,7 @@ TEST_CASE("Memory Basics", "[kernel][memory]") {
     SECTION("changing memory state") {
         // Because of the PageTable, Kernel::VMManager is too big to be created on the stack.
         auto manager = std::make_unique<Kernel::VMManager>(memory);
-        auto result = manager->MapBackingMemory(Memory::HEAP_VADDR, block, block.GetSize(),
+        auto result = manager->MapBackingMemory(Memory::HEAP_VADDR, block.GetRef(), block.GetSize(),
                                                 Kernel::MemoryState::Private);
         REQUIRE(result.Code() == RESULT_SUCCESS);
 

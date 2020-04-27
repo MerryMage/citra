@@ -13,7 +13,6 @@
 #include <boost/serialization/export.hpp>
 #include "common/common_funcs.h"
 #include "common/common_types.h"
-#include "common/memory_ref.h"
 #include "common/swap.h"
 #include "core/memory.h"
 
@@ -52,34 +51,39 @@ struct ConfigMemDef {
 static_assert(sizeof(ConfigMemDef) == Memory::CONFIG_MEMORY_SIZE,
               "Config Memory structure size is wrong");
 
-class Handler : public BackingMem {
+class Handler {
 public:
-    Handler();
-    ConfigMemDef& GetConfigMem();
+    explicit Handler(Memory::BackingMemory backing_memory);
+    Handler(u8* config_mem, Memory::MemoryRef ref);
 
-    u8* GetPtr() override {
-        return reinterpret_cast<u8*>(&config_mem);
+    ConfigMemDef& GetConfigMem() {
+        return config_mem;
     }
 
-    const u8* GetPtr() const override {
-        return reinterpret_cast<const u8*>(&config_mem);
-    }
-
-    std::size_t GetSize() const override {
-        return sizeof(config_mem);
+    Memory::MemoryRef GetRef() const {
+        return ref;
     }
 
 private:
-    ConfigMemDef config_mem;
+    ConfigMemDef& config_mem;
+    Memory::MemoryRef ref;
 
     friend class boost::serialization::access;
     template <class Archive>
-    void serialize(Archive& ar, const unsigned int file_version) {
-        ar& boost::serialization::base_object<BackingMem>(*this);
-        ar& boost::serialization::make_binary_object(&config_mem, sizeof(config_mem));
-    }
+    void serialize(Archive& ar, const unsigned int) {}
 };
 
 } // namespace ConfigMem
+
+
+namespace boost::serialization {
+
+template <class Archive>
+void save_construct_data(Archive& ar, const ConfigMem::Handler* t, const unsigned int);
+
+template <class Archive>
+void load_construct_data(Archive& ar, ConfigMem::Handler* t, const unsigned int);
+
+} // namespace boost::serialization
 
 BOOST_CLASS_EXPORT_KEY(ConfigMem::Handler)

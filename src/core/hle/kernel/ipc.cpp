@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include "common/alignment.h"
-#include "common/memory_ref.h"
 #include "core/core.h"
 #include "core/hle/ipc.h"
 #include "core/hle/kernel/handle_table.h"
@@ -183,6 +182,8 @@ ResultCode TranslateCommandBuffer(Kernel::KernelSystem& kernel, Memory::MemorySy
                     page_start - Memory::PAGE_SIZE, (num_pages + 2) * Memory::PAGE_SIZE);
                 ASSERT(result == RESULT_SUCCESS);
 
+                memory.GetBackingMemoryManager().FreeBackingMemory(found->buffer);
+                memory.GetBackingMemoryManager().FreeBackingMemory(found->reserve_buffer);
                 mapped_buffer_context.erase(found);
 
                 i += 1;
@@ -194,33 +195,34 @@ ResultCode TranslateCommandBuffer(Kernel::KernelSystem& kernel, Memory::MemorySy
             // TODO(Subv): Perform permission checks.
 
             // Reserve a page of memory before the mapped buffer
-            std::shared_ptr<BackingMem> reserve_buffer =
-                std::make_shared<BufferMem>(Memory::PAGE_SIZE);
+
+            Memory::BackingMemory reserve_buffer =
+                memory.GetBackingMemoryManager().AllocateBackingMemory(Memory::PAGE_SIZE);
             dst_process->vm_manager.MapBackingMemoryToBase(
-                Memory::IPC_MAPPING_VADDR, Memory::IPC_MAPPING_SIZE, reserve_buffer,
+                Memory::IPC_MAPPING_VADDR, Memory::IPC_MAPPING_SIZE, reserve_buffer.GetRef(),
                 Memory::PAGE_SIZE, Kernel::MemoryState::Reserved);
 
-            std::shared_ptr<BackingMem> buffer =
-                std::make_shared<BufferMem>(num_pages * Memory::PAGE_SIZE);
-            memory.ReadBlock(*src_process, source_address, buffer->GetPtr() + page_offset, size);
+            Memory::BackingMemory buffer = memory.GetBackingMemoryManager().AllocateBackingMemory(
+                num_pages * Memory::PAGE_SIZE);
+            memory.ReadBlock(*src_process, source_address, buffer.Get() + page_offset, size);
 
             // Map the page(s) into the target process' address space.
-            target_address =
-                dst_process->vm_manager
-                    .MapBackingMemoryToBase(Memory::IPC_MAPPING_VADDR, Memory::IPC_MAPPING_SIZE,
-                                            buffer, buffer->GetSize(), Kernel::MemoryState::Shared)
-                    .Unwrap();
+            target_address = dst_process->vm_manager
+                                 .MapBackingMemoryToBase(
+                                     Memory::IPC_MAPPING_VADDR, Memory::IPC_MAPPING_SIZE,
+                                     buffer.GetRef(), buffer.GetSize(), Kernel::MemoryState::Shared)
+                                 .Unwrap();
 
             cmd_buf[i++] = target_address + page_offset;
 
             // Reserve a page of memory after the mapped buffer
             dst_process->vm_manager.MapBackingMemoryToBase(
-                Memory::IPC_MAPPING_VADDR, Memory::IPC_MAPPING_SIZE, reserve_buffer,
-                reserve_buffer->GetSize(), Kernel::MemoryState::Reserved);
+                Memory::IPC_MAPPING_VADDR, Memory::IPC_MAPPING_SIZE, reserve_buffer.GetRef(),
+                reserve_buffer.GetSize(), Kernel::MemoryState::Reserved);
 
             mapped_buffer_context.push_back({permissions, size, source_address,
-                                             target_address + page_offset, std::move(buffer),
-                                             std::move(reserve_buffer)});
+                                             target_address + page_offset, buffer.GetRef(),
+                                             reserve_buffer.GetRef()});
 
             break;
         }

@@ -79,14 +79,16 @@ void KernelSystem::MemoryInit(u32 mem_type, u8 n3ds_mode) {
     // We must've allocated the entire FCRAM by the end
     ASSERT(base == (is_new_3ds ? Memory::FCRAM_N3DS_SIZE : Memory::FCRAM_SIZE));
 
-    config_mem_handler = std::make_shared<ConfigMem::Handler>();
+    config_mem_handler = std::make_shared<ConfigMem::Handler>(
+        memory.GetBackingMemoryManager().AllocateBackingMemory(Memory::CONFIG_MEMORY_SIZE));
     auto& config_mem = config_mem_handler->GetConfigMem();
     config_mem.app_mem_type = reported_mem_type;
     config_mem.app_mem_alloc = memory_region_sizes[reported_mem_type][0];
     config_mem.sys_mem_alloc = memory_regions[1]->size;
     config_mem.base_mem_alloc = memory_regions[2]->size;
 
-    shared_page_handler = std::make_shared<SharedPage::Handler>(timing);
+    shared_page_handler = std::make_shared<SharedPage::Handler>(
+        timing, memory.GetBackingMemoryManager().AllocateBackingMemory(Memory::SHARED_PAGE_SIZE));
 }
 
 std::shared_ptr<MemoryRegionInfo> KernelSystem::GetMemoryRegion(MemoryRegion region) {
@@ -160,16 +162,18 @@ void KernelSystem::HandleSpecialMapping(VMManager& address_space, const AddressM
 }
 
 void KernelSystem::MapSharedPages(VMManager& address_space) {
-    auto cfg_mem_vma = address_space
-                           .MapBackingMemory(Memory::CONFIG_MEMORY_VADDR, {config_mem_handler},
-                                             Memory::CONFIG_MEMORY_SIZE, MemoryState::Shared)
-                           .Unwrap();
+    auto cfg_mem_vma =
+        address_space
+            .MapBackingMemory(Memory::CONFIG_MEMORY_VADDR, config_mem_handler->GetRef(),
+                              Memory::CONFIG_MEMORY_SIZE, MemoryState::Shared)
+            .Unwrap();
     address_space.Reprotect(cfg_mem_vma, VMAPermission::Read);
 
-    auto shared_page_vma = address_space
-                               .MapBackingMemory(Memory::SHARED_PAGE_VADDR, {shared_page_handler},
-                                                 Memory::SHARED_PAGE_SIZE, MemoryState::Shared)
-                               .Unwrap();
+    auto shared_page_vma =
+        address_space
+            .MapBackingMemory(Memory::SHARED_PAGE_VADDR, shared_page_handler->GetRef(),
+                              Memory::SHARED_PAGE_SIZE, MemoryState::Shared)
+            .Unwrap();
     address_space.Reprotect(shared_page_vma, VMAPermission::Read);
 }
 

@@ -15,7 +15,7 @@
 #include "core/hle/kernel/svc.h"
 #include "core/memory.h"
 
-class DynarmicThreadContext final : public ARM_Interface::ThreadContext {
+class DynarmicThreadContext final : public ThreadContext {
 public:
     DynarmicThreadContext() {
         Reset();
@@ -251,7 +251,7 @@ void ARM_Dynarmic::SetCP15Register(CP15Register reg, u32 value) {
     UNREACHABLE_MSG("Unknown CP15 register: {}", static_cast<size_t>(reg));
 }
 
-std::unique_ptr<ARM_Interface::ThreadContext> ARM_Dynarmic::NewContext() const {
+std::unique_ptr<ThreadContext> ARM_Dynarmic::NewContext() const {
     return std::make_unique<DynarmicThreadContext>();
 }
 
@@ -321,7 +321,9 @@ void ARM_Dynarmic::ServeBreak() {
 std::unique_ptr<Dynarmic::A32::Jit> ARM_Dynarmic::MakeJit() {
     Dynarmic::A32::UserConfig config;
     config.callbacks = cb.get();
-    config.page_table = &current_page_table->GetPointerArray();
+    if (current_page_table) {
+        config.page_table = current_page_table->GetRawPageTables();
+    }
     config.coprocessors[15] = std::make_shared<DynarmicCP15>(cp15_state);
     config.define_unpredictable_behaviour = true;
     return std::make_unique<Dynarmic::A32::Jit>(config);

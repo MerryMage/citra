@@ -15,11 +15,13 @@
 #include <boost/serialization/vector.hpp>
 #include "common/common_types.h"
 #include "common/thread_queue_list.h"
-#include "core/arm/arm_interface.h"
+#include "core/arm/arm_thread_context.h"
 #include "core/core_timing.h"
 #include "core/hle/kernel/object.h"
 #include "core/hle/kernel/wait_object.h"
 #include "core/hle/result.h"
+
+class ARM_Interface;
 
 namespace Kernel {
 
@@ -119,9 +121,7 @@ public:
         this->cpu = &cpu;
     }
 
-    std::unique_ptr<ARM_Interface::ThreadContext> NewContext() {
-        return cpu->NewContext();
-    }
+    std::unique_ptr<ThreadContext> NewContext();
 
 private:
     /**
@@ -285,7 +285,7 @@ public:
         return status == ThreadStatus::WaitSynchAll;
     }
 
-    std::unique_ptr<ARM_Interface::ThreadContext> context;
+    std::unique_ptr<ThreadContext> context;
 
     u32 thread_id;
 

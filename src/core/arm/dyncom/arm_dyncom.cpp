@@ -12,7 +12,7 @@
 #include "core/core.h"
 #include "core/core_timing.h"
 
-class DynComThreadContext final : public ARM_Interface::ThreadContext {
+class DynComThreadContext final : public ThreadContext {
 public:
     DynComThreadContext() {
         Reset();
@@ -162,7 +162,7 @@ void ARM_DynCom::ExecuteInstructions(u64 num_instructions) {
     state->ServeBreak();
 }
 
-std::unique_ptr<ARM_Interface::ThreadContext> ARM_DynCom::NewContext() const {
+std::unique_ptr<ThreadContext> ARM_DynCom::NewContext() const {
     return std::make_unique<DynComThreadContext>();
 }
 

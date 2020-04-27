@@ -4,15 +4,38 @@
 
 #include <cstring>
 #include "common/archives.h"
+#include "core/core.h"
 #include "core/hle/kernel/config_mem.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 SERIALIZE_EXPORT_IMPL(ConfigMem::Handler)
 
+namespace boost::serialization {
+
+template <class Archive>
+void save_construct_data(Archive& ar, const ConfigMem::Handler* t, const unsigned int) {
+    ar << t->GetRef();
+}
+template void save_construct_data<oarchive>(oarchive& ar, const ConfigMem::Handler* t,
+                                            const unsigned int);
+
+template <class Archive>
+void load_construct_data(Archive& ar, ConfigMem::Handler* t, const unsigned int) {
+    Memory::MemoryRef ref;
+    ar >> ref;
+    ::new (t) ConfigMem::Handler(Core::System::GetInstance().Memory().GetPointerForRef(ref), ref);
+}
+template void load_construct_data<iarchive>(iarchive& ar, ConfigMem::Handler* t,
+                                            const unsigned int);
+
+} // namespace boost::serialization
+
 namespace ConfigMem {
 
-Handler::Handler() {
+Handler::Handler(Memory::BackingMemory backing_memory)
+    : config_mem(*reinterpret_cast<ConfigMemDef*>(backing_memory.Get())),
+      ref(backing_memory.GetRef()) {
     std::memset(&config_mem, 0, sizeof(config_mem));
 
     // Values extracted from firmware 11.2.0-35E
@@ -29,8 +52,7 @@ Handler::Handler() {
     config_mem.firm_ctr_sdk_ver = 0x0000F297;
 }
 
-ConfigMemDef& Handler::GetConfigMem() {
-    return config_mem;
-}
+Handler::Handler(u8* config_mem, Memory::MemoryRef ref)
+    : config_mem(*reinterpret_cast<ConfigMemDef*>(config_mem)), ref(ref) {}
 
 } // namespace ConfigMem

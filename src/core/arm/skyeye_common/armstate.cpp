@@ -5,6 +5,7 @@
 #include <algorithm>
 #include "common/logging/log.h"
 #include "common/swap.h"
+#include "core/arm/arm_interface.h"
 #include "core/arm/skyeye_common/armstate.h"
 #include "core/arm/skyeye_common/vfp/vfp.h"
 #include "core/core.h"

@@ -302,7 +302,7 @@ static std::tuple<std::size_t, std::size_t, bool> GetFreeThreadLocalSlot(
  * @param entry_point Address of entry point for execution
  * @param arg User argument for thread
  */
-static void ResetThreadContext(const std::unique_ptr<ARM_Interface::ThreadContext>& context,
+static void ResetThreadContext(const std::unique_ptr<ThreadContext>& context,
                                u32 stack_top, u32 entry_point, u32 arg) {
     context->Reset();
     context->SetCpuRegister(0, arg);
@@ -503,6 +503,10 @@ ThreadManager::~ThreadManager() {
 
 const std::vector<std::shared_ptr<Thread>>& ThreadManager::GetThreadList() {
     return thread_list;
+}
+
+std::unique_ptr<ThreadContext> ThreadManager::NewContext() {
+    return cpu->NewContext();
 }
 
 } // namespace Kernel

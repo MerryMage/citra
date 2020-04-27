@@ -6,6 +6,7 @@
 #include <vector>
 #include "common/archives.h"
 #include "common/assert.h"
+#include "core/arm/arm_interface.h"
 #include "core/core.h"
 #include "core/global.h"
 #include "core/hle/kernel/errors.h"

@@ -21,10 +21,16 @@ static std::shared_ptr<Object> MakeObject(Kernel::KernelSystem& kernel) {
     return kernel.CreateEvent(ResetType::OneShot);
 }
 
+static std::vector<u8> ToVector(Memory::BackingMemory& bm) {
+    return {bm.Get(), bm.Get() + bm.GetSize()};
+}
+
 TEST_CASE("HLERequestContext::PopulateFromIncomingCommandBuffer", "[core][kernel]") {
     Core::Timing timing(1, 100);
     Memory::MemorySystem memory;
-    Kernel::KernelSystem kernel(memory, timing, [] {}, 0, 1, 0);
+    Memory::BackingMemoryManager& bmm = memory.GetBackingMemoryManager();
+    Kernel::KernelSystem kernel(
+        memory, timing, [] {}, 0, 1, 0);
     auto [server, client] = kernel.CreateSessionPair();
     HLERequestContext context(kernel, std::move(server), nullptr);
 
@@ -136,13 +142,12 @@ TEST_CASE("HLERequestContext::PopulateFromIncomingCommandBuffer", "[core][kernel
     }
 
     SECTION("translates StaticBuffer descriptors") {
-        auto mem = std::make_shared<BufferMem>(Memory::PAGE_SIZE);
-        MemoryRef buffer{mem};
-        std::fill(buffer.GetPtr(), buffer.GetPtr() + buffer.GetSize(), 0xAB);
+        auto buffer = bmm.AllocateBackingMemory(Memory::PAGE_SIZE);
+        std::fill(buffer.Get(), buffer.Get() + buffer.GetSize(), 0xAB);
 
         VAddr target_address = 0x10000000;
-        auto result = process->vm_manager.MapBackingMemory(target_address, buffer, buffer.GetSize(),
-                                                           MemoryState::Private);
+        auto result = process->vm_manager.MapBackingMemory(target_address, buffer.GetRef(),
+                                                           buffer.GetSize(), MemoryState::Private);
         REQUIRE(result.Code() == RESULT_SUCCESS);
 
         const u32_le input[]{
@@ -153,19 +158,18 @@ TEST_CASE("HLERequestContext::PopulateFromIncomingCommandBuffer", "[core][kernel
 
         context.PopulateFromIncomingCommandBuffer(input, process);
 
-        CHECK(context.GetStaticBuffer(0) == mem->Vector());
+        CHECK(context.GetStaticBuffer(0) == ToVector(buffer));
 
         REQUIRE(process->vm_manager.UnmapRange(target_address, buffer.GetSize()) == RESULT_SUCCESS);
     }
 
     SECTION("translates MappedBuffer descriptors") {
-        auto mem = std::make_shared<BufferMem>(Memory::PAGE_SIZE);
-        MemoryRef buffer{mem};
-        std::fill(buffer.GetPtr(), buffer.GetPtr() + buffer.GetSize(), 0xCD);
+        auto buffer = bmm.AllocateBackingMemory(Memory::PAGE_SIZE);
+        std::fill(buffer.Get(), buffer.Get() + buffer.GetSize(), 0xCD);
 
         VAddr target_address = 0x10000000;
-        auto result = process->vm_manager.MapBackingMemory(target_address, buffer, buffer.GetSize(),
-                                                           MemoryState::Private);
+        auto result = process->vm_manager.MapBackingMemory(target_address, buffer.GetRef(),
+                                                           buffer.GetSize(), MemoryState::Private);
 
         const u32_le input[]{
             IPC::MakeHeader(0, 0, 2),
@@ -178,28 +182,28 @@ TEST_CASE("HLERequestContext::PopulateFromIncomingCommandBuffer", "[core][kernel
         std::vector<u8> other_buffer(buffer.GetSize());
         context.GetMappedBuffer(0).Read(other_buffer.data(), 0, buffer.GetSize());
 
-        CHECK(other_buffer == mem->Vector());
+        CHECK(other_buffer == ToVector(buffer));
 
         REQUIRE(process->vm_manager.UnmapRange(target_address, buffer.GetSize()) == RESULT_SUCCESS);
     }
 
     SECTION("translates mixed params") {
-        auto mem_static = std::make_shared<BufferMem>(Memory::PAGE_SIZE);
-        MemoryRef buffer_static{mem_static};
-        std::fill(buffer_static.GetPtr(), buffer_static.GetPtr() + buffer_static.GetSize(), 0xCE);
+        auto buffer_static = bmm.AllocateBackingMemory(Memory::PAGE_SIZE);
+        std::fill(buffer_static.Get(), buffer_static.Get() + buffer_static.GetSize(), 0xCE);
 
-        auto mem_mapped = std::make_shared<BufferMem>(Memory::PAGE_SIZE);
-        MemoryRef buffer_mapped{mem_mapped};
-        std::fill(buffer_mapped.GetPtr(), buffer_mapped.GetPtr() + buffer_mapped.GetSize(), 0xDF);
+        auto buffer_mapped = bmm.AllocateBackingMemory(Memory::PAGE_SIZE);
+        std::fill(buffer_mapped.Get(), buffer_mapped.Get() + buffer_mapped.GetSize(), 0xDF);
 
         VAddr target_address_static = 0x10000000;
-        auto result = process->vm_manager.MapBackingMemory(
-            target_address_static, buffer_static, buffer_static.GetSize(), MemoryState::Private);
+        auto result =
+            process->vm_manager.MapBackingMemory(target_address_static, buffer_static.GetRef(),
+                                                 buffer_static.GetSize(), MemoryState::Private);
         REQUIRE(result.Code() == RESULT_SUCCESS);
 
         VAddr target_address_mapped = 0x20000000;
-        result = process->vm_manager.MapBackingMemory(
-            target_address_mapped, buffer_mapped, buffer_mapped.GetSize(), MemoryState::Private);
+        result =
+            process->vm_manager.MapBackingMemory(target_address_mapped, buffer_mapped.GetRef(),
+                                                 buffer_mapped.GetSize(), MemoryState::Private);
         REQUIRE(result.Code() == RESULT_SUCCESS);
 
         auto a = MakeObject(kernel);
@@ -224,10 +228,10 @@ TEST_CASE("HLERequestContext::PopulateFromIncomingCommandBuffer", "[core][kernel
         CHECK(output[2] == 0xABCDEF00);
         CHECK(context.GetIncomingHandle(output[4]) == a);
         CHECK(output[6] == process->process_id);
-        CHECK(context.GetStaticBuffer(0) == mem_static->Vector());
+        CHECK(context.GetStaticBuffer(0) == ToVector(buffer_static));
         std::vector<u8> other_buffer(buffer_mapped.GetSize());
         context.GetMappedBuffer(0).Read(other_buffer.data(), 0, buffer_mapped.GetSize());
-        CHECK(other_buffer == mem_mapped->Vector());
+        CHECK(other_buffer == ToVector(buffer_mapped));
 
         REQUIRE(process->vm_manager.UnmapRange(target_address_static, buffer_static.GetSize()) ==
                 RESULT_SUCCESS);
@@ -239,7 +243,9 @@ TEST_CASE("HLERequestContext::PopulateFromIncomingCommandBuffer", "[core][kernel
 TEST_CASE("HLERequestContext::WriteToOutgoingCommandBuffer", "[core][kernel]") {
     Core::Timing timing(1, 100);
     Memory::MemorySystem memory;
-    Kernel::KernelSystem kernel(memory, timing, [] {}, 0, 1, 0);
+    Memory::BackingMemoryManager& bmm = memory.GetBackingMemoryManager();
+    Kernel::KernelSystem kernel(
+        memory, timing, [] {}, 0, 1, 0);
     auto [server, client] = kernel.CreateSessionPair();
     HLERequestContext context(kernel, std::move(server), nullptr);
 
@@ -318,12 +324,11 @@ TEST_CASE("HLERequestContext::WriteToOutgoingCommandBuffer", "[core][kernel]") {
 
         context.AddStaticBuffer(0, input_buffer);
 
-        auto output_mem = std::make_shared<BufferMem>(Memory::PAGE_SIZE);
-        MemoryRef output_buffer{output_mem};
+        auto output_buffer = bmm.AllocateBackingMemory(Memory::PAGE_SIZE);
 
         VAddr target_address = 0x10000000;
         auto result = process->vm_manager.MapBackingMemory(
-            target_address, output_buffer, output_buffer.GetSize(), MemoryState::Private);
+            target_address, output_buffer.GetRef(), output_buffer.GetSize(), MemoryState::Private);
         REQUIRE(result.Code() == RESULT_SUCCESS);
 
         input[0] = IPC::MakeHeader(0, 0, 2);
@@ -340,7 +345,7 @@ TEST_CASE("HLERequestContext::WriteToOutgoingCommandBuffer", "[core][kernel]") {
 
         context.WriteToOutgoingCommandBuffer(output_cmdbuff.data(), *process);
 
-        CHECK(output_mem->Vector() == input_buffer);
+        CHECK(ToVector(output_buffer) == input_buffer);
         REQUIRE(process->vm_manager.UnmapRange(target_address, output_buffer.GetSize()) ==
                 RESULT_SUCCESS);
     }
@@ -349,12 +354,11 @@ TEST_CASE("HLERequestContext::WriteToOutgoingCommandBuffer", "[core][kernel]") {
         std::vector<u8> input_buffer(Memory::PAGE_SIZE);
         std::fill(input_buffer.begin(), input_buffer.end(), 0xAB);
 
-        auto output_mem = std::make_shared<BufferMem>(Memory::PAGE_SIZE);
-        MemoryRef output_buffer{output_mem};
+        auto output_buffer = bmm.AllocateBackingMemory(Memory::PAGE_SIZE);
 
         VAddr target_address = 0x10000000;
         auto result = process->vm_manager.MapBackingMemory(
-            target_address, output_buffer, output_buffer.GetSize(), MemoryState::Private);
+            target_address, output_buffer.GetRef(), output_buffer.GetSize(), MemoryState::Private);
         REQUIRE(result.Code() == RESULT_SUCCESS);
 
         const u32_le input_cmdbuff[]{
@@ -375,7 +379,7 @@ TEST_CASE("HLERequestContext::WriteToOutgoingCommandBuffer", "[core][kernel]") {
 
         CHECK(output[1] == IPC::MappedBufferDesc(output_buffer.GetSize(), IPC::W));
         CHECK(output[2] == target_address);
-        CHECK(output_mem->Vector() == input_buffer);
+        CHECK(ToVector(output_buffer) == input_buffer);
         REQUIRE(process->vm_manager.UnmapRange(target_address, output_buffer.GetSize()) ==
                 RESULT_SUCCESS);
     }

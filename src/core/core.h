@@ -191,11 +191,7 @@ public:
         return static_cast<u32>(cpu_cores.size());
     }
 
-    void InvalidateCacheRange(u32 start_address, std::size_t length) {
-        for (const auto& cpu : cpu_cores) {
-            cpu->InvalidateCacheRange(start_address, length);
-        }
-    }
+    void InvalidateCacheRange(u32 start_address, std::size_t length);
 
     /**
      * Gets a reference to the emulated DSP.

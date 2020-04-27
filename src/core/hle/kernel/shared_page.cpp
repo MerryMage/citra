@@ -20,8 +20,18 @@ SERIALIZE_EXPORT_IMPL(SharedPage::Handler)
 namespace boost::serialization {
 
 template <class Archive>
+void save_construct_data(Archive& ar, const SharedPage::Handler* t, const unsigned int) {
+    ar << t->GetRef();
+}
+template void save_construct_data<oarchive>(oarchive& ar, const SharedPage::Handler* t,
+                                            const unsigned int);
+
+template <class Archive>
 void load_construct_data(Archive& ar, SharedPage::Handler* t, const unsigned int) {
-    ::new (t) SharedPage::Handler(Core::System::GetInstance().CoreTiming());
+    Memory::MemoryRef ref;
+    ar >> ref;
+    ::new (t) SharedPage::Handler(Core::System::GetInstance().CoreTiming(),
+                                  Core::System::GetInstance().Memory().GetPointerForRef(ref), ref);
 }
 template void load_construct_data<iarchive>(iarchive& ar, SharedPage::Handler* t,
                                             const unsigned int);
@@ -55,7 +65,9 @@ static std::chrono::seconds GetInitTime() {
     }
 }
 
-Handler::Handler(Core::Timing& timing) : timing(timing) {
+Handler::Handler(Core::Timing& timing, Memory::BackingMemory backing_memory)
+    : timing(timing), shared_page(*reinterpret_cast<SharedPageDef*>(backing_memory.Get())),
+      ref(backing_memory.GetRef()) {
     std::memset(&shared_page, 0, sizeof(shared_page));
 
     shared_page.running_hw = 0x1; // product
@@ -140,8 +152,7 @@ void Handler::Set3DSlider(float slidestate) {
     shared_page.sliderstate_3d = static_cast<float_le>(slidestate);
 }
 
-SharedPageDef& Handler::GetSharedPage() {
-    return shared_page;
-}
+Handler::Handler(Core::Timing& timing, u8* shared_page, Memory::MemoryRef ref)
+    : timing(timing), shared_page(*reinterpret_cast<SharedPageDef*>(shared_page)), ref(ref) {}
 
 } // namespace SharedPage

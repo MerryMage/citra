@@ -10,6 +10,7 @@
 #include "common/common_types.h"
 #include "core/hle/ipc.h"
 #include "core/hle/kernel/thread.h"
+#include "core/memory_ref.h"
 
 namespace Memory {
 class MemorySystem;
@@ -25,8 +26,8 @@ struct MappedBufferContext {
     VAddr source_address;
     VAddr target_address;
 
-    std::shared_ptr<BackingMem> buffer;
-    std::shared_ptr<BackingMem> reserve_buffer;
+    Memory::MemoryRef buffer;
+    Memory::MemoryRef reserve_buffer;
 
 private:
     template <class Archive>

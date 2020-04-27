@@ -10,6 +10,7 @@
 #include "common/common_types.h"
 #include "common/logging/log.h"
 #include "common/microprofile.h"
+#include "core/arm/arm_interface.h"
 #include "core/arm/dyncom/arm_dyncom_dec.h"
 #include "core/arm/dyncom/arm_dyncom_interpreter.h"
 #include "core/arm/dyncom/arm_dyncom_run.h"

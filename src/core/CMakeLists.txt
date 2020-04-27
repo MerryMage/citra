@@ -2,7 +2,10 @@ add_library(core STATIC
     3ds.h
     announce_multiplayer_session.cpp
     announce_multiplayer_session.h
+    backing_memory_manager.h
+    backing_memory_manager_generic.cpp
     arm/arm_interface.h
+    arm/arm_thread_context.h
     arm/dyncom/arm_dyncom.cpp
     arm/dyncom/arm_dyncom.h
     arm/dyncom/arm_dyncom_dec.cpp
@@ -438,6 +441,8 @@ add_library(core STATIC
     loader/smdh.h
     memory.cpp
     memory.h
+    memory_constants.h
+    memory_ref.h
     mmio.h
     movie.cpp
     movie.h

@@ -7,6 +7,7 @@
 #include <boost/serialization/vector.hpp>
 #include "common/archives.h"
 #include "common/serialization/atomic.h"
+#include "core/arm/arm_interface.h"
 #include "core/hle/kernel/client_port.h"
 #include "core/hle/kernel/config_mem.h"
 #include "core/hle/kernel/handle_table.h"
