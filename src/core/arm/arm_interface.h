@@ -266,26 +266,10 @@ private:
             const auto r = GetVFPReg(i);
             ar << r;
         }
-        for (std::size_t i = 0; i < VFPSystemRegister::VFP_SYSTEM_REGISTER_COUNT; i++) {
-            const auto reg = static_cast<VFPSystemRegister>(i);
-            u32 r = 0;
-            switch (reg) {
-            case VFP_FPSCR:
-            case VFP_FPEXC:
-                r = GetVFPSystemReg(reg);
-            }
-            ar << r;
-        }
-        for (std::size_t i = 0; i < CP15Register::CP15_REGISTER_COUNT; i++) {
-            const auto reg = static_cast<CP15Register>(i);
-            u32 r = 0;
-            switch (reg) {
-            case CP15_THREAD_UPRW:
-            case CP15_THREAD_URO:
-                r = GetCP15Register(reg);
-            }
-            ar << r;
-        }
+        ar << GetVFPSystemReg(VFP_FPSCR);
+        ar << GetVFPSystemReg(VFP_FPEXC);
+        ar << GetCP15Register(CP15_THREAD_UPRW);
+        ar << GetCP15Register(CP15_THREAD_URO);
     }
 
     template <class Archive>
@@ -310,24 +294,14 @@ private:
             ar >> r;
             SetVFPReg(i, r);
         }
-        for (std::size_t i = 0; i < VFPSystemRegister::VFP_SYSTEM_REGISTER_COUNT; i++) {
-            ar >> r;
-            const auto reg = static_cast<VFPSystemRegister>(i);
-            switch (reg) {
-            case VFP_FPSCR:
-            case VFP_FPEXC:
-                SetVFPSystemReg(reg, r);
-            }
-        }
-        for (std::size_t i = 0; i < CP15Register::CP15_REGISTER_COUNT; i++) {
-            ar >> r;
-            const auto reg = static_cast<CP15Register>(i);
-            switch (reg) {
-            case CP15_THREAD_UPRW:
-            case CP15_THREAD_URO:
-                SetCP15Register(reg, r);
-            }
-        }
+        ar >> r;
+        SetVFPSystemReg(VFP_FPSCR, r);
+        ar >> r;
+        SetVFPSystemReg(VFP_FPEXC, r);
+        ar >> r;
+        SetCP15Register(CP15_THREAD_UPRW, r);
+        ar >> r;
+        SetCP15Register(CP15_THREAD_URO, r);
     }
 
     BOOST_SERIALIZATION_SPLIT_MEMBER()
